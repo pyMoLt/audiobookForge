@@ -1,0 +1,185 @@
+import Foundation
+import AVFoundation
+
+/// Streams raw 16-bit PCM through ffmpeg in a single pass — optional EBU
+/// R128 loudness normalization plus the final codec encode — so chapter
+/// audio never exists as a large uncompressed WAV on disk. PCM is fed
+/// straight into ffmpeg's stdin; only the small compressed result is
+/// written to the chapter directory.
+///
+/// Two feeding modes:
+/// - Swift forwards PCM chunks itself (`write(_:)`, used by PiperEngine).
+/// - A producer subprocess writes PCM directly: its `standardOutput` is set
+///   to `pcmPipe`, so the bytes flow kernel-side without Swift in the loop
+///   (used by the Python bridges via KokoroEngine/SupertonicEngine).
+///
+/// Declared `@unchecked Sendable`: all mutable state sits behind `LockedBox`,
+/// and the wrapped `Process`/`Pipe` are only driven from the owning
+/// engine's cancellation/termination flow.
+final class ChapterAudioEncoder: @unchecked Sendable {
+    enum EncoderError: LocalizedError {
+        case unsupportedOutput(String)
+        case ffmpegFailed(String)
+        case noAudio
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedOutput(let ext): return "Nicht unterstütztes Kapitel-Audioformat: .\(ext)"
+            case .ffmpegFailed(let message): return "ffmpeg-Kodierung fehlgeschlagen: \(message)"
+            case .noAudio: return "Es wurden keine PCM-Daten an den Kodierer übergeben."
+            }
+        }
+    }
+
+    /// File extension of the per-chapter audio file for a book's output
+    /// format. M4B/M4A books keep AAC chapters (.m4a), MP3 books keep MP3
+    /// chapters (.mp3) — so packaging is a pure remux with no re-encode.
+    static func fileExtension(for format: OutputFormat) -> String {
+        switch format {
+        case .m4b, .m4a: return "m4a"
+        case .mp3Chapters: return "mp3"
+        }
+    }
+
+    /// Builds the ffmpeg argument list for one streaming encode pass.
+    /// `sampleRate` is the producer's rate (e.g. 24000 for Kokoro, 22050
+    /// for Piper); the encode keeps it as-is, mono.
+    static func arguments(
+        sampleRate: Int,
+        outputURL: URL,
+        settings: AppSettings,
+        inputSpecifier: String = "pipe:0"
+    ) throws -> [String] {
+        var arguments = [
+            "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "s16le", "-ar", String(max(1, sampleRate)), "-ac", "1",
+            "-i", inputSpecifier,
+        ]
+        if settings.loudnessNormalizationEnabled {
+            arguments += ["-af", "loudnorm=I=\(settings.loudnessTargetLUFS):TP=\(settings.loudnessTruePeakDB):LRA=\(settings.loudnessRangeLU)"]
+        }
+        switch outputURL.pathExtension.lowercased() {
+        case "m4a":
+            arguments += ["-c:a", "aac", "-b:a", "\(max(16, settings.chapterAudioBitrateKbps))k", "-f", "ipod", outputURL.path]
+        case "mp3":
+            arguments += ["-c:a", "libmp3lame", "-qscale:a", String(settings.mp3Quality), outputURL.path]
+        default:
+            throw EncoderError.unsupportedOutput(outputURL.pathExtension)
+        }
+        return arguments
+    }
+
+    private let process: Process
+    private let stdinPipe: Pipe
+    private let outputURL: URL
+    private let state = LockedBox<EncoderState>(EncoderState())
+
+    private struct EncoderState {
+        var continuation: CheckedContinuation<Void, Error>?
+        var errorLines: [String] = []
+        var terminated = false
+        var exitStatus: Int32?
+    }
+
+    /// The pipe ffmpeg reads PCM from. Producers that stream themselves
+    /// (Python bridges) set their `standardOutput` to this.
+    var pcmPipe: Pipe { stdinPipe }
+
+    /// Write end for engines whose PCM Swift forwards.
+    var pcmWriter: FileHandle { stdinPipe.fileHandleForWriting }
+
+    /// Starts ffmpeg for one streaming encode. `stdinPipe` is the pipe
+    /// ffmpeg reads PCM from — callers create it up front so a producer
+    /// subprocess (Python bridge) can be wired to it before the sample
+    /// rate is even known; ffmpeg only starts once the rate arrived.
+    static func start(sampleRate: Int, outputURL: URL, settings: AppSettings, stdinPipe: Pipe) throws -> ChapterAudioEncoder {
+        try ChapterAudioEncoder(sampleRate: sampleRate, outputURL: outputURL, settings: settings, stdinPipe: stdinPipe)
+    }
+
+    private init(sampleRate: Int, outputURL: URL, settings: AppSettings, stdinPipe: Pipe) throws {
+        guard let ffmpeg = FFmpegLocator.resolve(settings: settings) else {
+            throw PackagerError.ffmpegNotFound
+        }
+        self.outputURL = outputURL
+        self.process = Process()
+        self.process.executableURL = ffmpeg
+        self.process.arguments = try Self.arguments(sampleRate: sampleRate, outputURL: outputURL, settings: settings)
+        self.stdinPipe = stdinPipe
+        self.process.standardInput = stdinPipe
+        self.process.standardOutput = Pipe()
+
+        let errorPipe = Pipe()
+        self.process.standardError = errorPipe
+        errorPipe.fileHandleForReading.readabilityHandler = { [state] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            state.withLock { current in
+                current.errorLines.append(contentsOf: text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init))
+                if current.errorLines.count > 20 { current.errorLines.removeFirst(current.errorLines.count - 20) }
+            }
+        }
+
+        process.terminationHandler = { [state] proc in
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            state.withLock { current in
+                current.terminated = true
+                current.exitStatus = proc.terminationStatus
+                current.continuation?.resume(returning: ())
+                current.continuation = nil
+            }
+        }
+
+        try process.run()
+    }
+
+    /// Forwards PCM produced by a subprocess Swift controls (Piper). Safe
+    /// to call from a pipe's readability handler (blocks with backpressure
+    /// if ffmpeg is slower than the producer).
+    func write(_ data: Data) throws {
+        try Task.checkCancellation()
+        guard !data.isEmpty else { return }
+        stdinPipe.fileHandleForWriting.write(data)
+    }
+
+    /// Closes the PCM input and waits for ffmpeg to finalize the file.
+    /// Returns the encoded duration in seconds. Throws if ffmpeg failed or
+    /// no PCM was ever written.
+    func finish() async throws -> Double {
+        stdinPipe.fileHandleForWriting.closeFile()
+        try Task.checkCancellation()
+
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                let alreadyTerminated = state.withLock { current -> Bool in
+                    if current.terminated { return true }
+                    current.continuation = continuation
+                    return false
+                }
+                if alreadyTerminated { continuation.resume() }
+            }
+        } onCancel: {
+            abort()
+        }
+
+        let (status, lines) = state.withLock { ($0.exitStatus, $0.errorLines) }
+        guard status == 0 else {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw EncoderError.ffmpegFailed(lines.joined(separator: "\n"))
+        }
+        guard let size = try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int, size > 1000 else {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw EncoderError.noAudio
+        }
+        return try await WaveFileInspector.durationSeconds(url: outputURL)
+    }
+
+    /// Kills ffmpeg and removes the partial output file (cancellation or
+    /// producer failure). No-op if the encode already finished cleanly.
+    func abort() {
+        let alreadyTerminated = state.withLock { $0.terminated }
+        if !alreadyTerminated, process.isRunning {
+            process.terminate()
+        }
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+}

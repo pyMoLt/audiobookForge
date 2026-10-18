@@ -1,0 +1,21 @@
+.DS_Store
+xcuserdata/
+DerivedData/
+*.xcuserstate
+Derived/
+.build/
+dist/
+**/__pycache__/
+*.pyc
+# Große Test-/Hörproben-Dateien (bereits getrackte bleiben historisch)
+docs/hoerproben/*.wav
+docs/hoerproben/*.m4a
+docs/e2e/**/*.m4b
+docs/e2e-abbildungen/**/*.m4b
+docs/v3-abnahme/
+
+Derived/
+xcuserdata/
+*.xcuserstate
+.agent-state*
+PROGRESS*.md

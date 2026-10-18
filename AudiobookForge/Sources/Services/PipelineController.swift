@@ -1,0 +1,978 @@
+import Foundation
+import PDFKit
+
+@MainActor
+@Observable
+final class PipelineController {
+    private let libraryStore: LibraryStore
+    private let settingsStore: SettingsStore
+
+    /// Only one book actually runs its pipeline at a time — TTS synthesis
+    /// saturates the local GPU/CPU, so running several books "concurrently"
+    /// would just make all of them slower. Everything else waits in a
+    /// visible, reorderable FIFO queue.
+    private(set) var activeBookID: UUID?
+    private(set) var queuedBookIDs: [UUID] = []
+    private var tasks: [UUID: Task<Void, Never>] = [:]
+    /// Live progress of running books (not persisted). See `RunProgress`.
+    private(set) var progress: [UUID: RunProgress] = [:]
+
+    func updateProgress(_ bookID: UUID, _ mutate: (inout RunProgress) -> Void) {
+        guard var current = progress[bookID] else { return }
+        mutate(&current)
+        progress[bookID] = current
+    }
+
+    private func enterStage(_ bookID: UUID, _ stage: PipelineStage, detail: String = "") {
+        updateProgress(bookID) {
+            $0.stage = stage
+            $0.phaseStartedAt = Date()
+            $0.phaseFraction = 0
+            $0.detail = detail
+        }
+    }
+
+    init(libraryStore: LibraryStore, settingsStore: SettingsStore) {
+        self.libraryStore = libraryStore
+        self.settingsStore = settingsStore
+    }
+
+    func isRunning(_ bookID: UUID) -> Bool {
+        activeBookID == bookID
+    }
+
+    func isQueued(_ bookID: UUID) -> Bool {
+        queuedBookIDs.contains(bookID)
+    }
+
+    /// Adds a book to the processing queue. Starts immediately if nothing
+    /// else is running; otherwise waits its turn.
+    func enqueue(bookID: UUID) {
+        guard activeBookID != bookID, !queuedBookIDs.contains(bookID) else { return }
+        guard var book = libraryStore.book(id: bookID) else { return }
+        book.lastErrorMessage = nil
+
+        if activeBookID == nil {
+            book.status = .processing
+            libraryStore.upsert(book)
+            startActive(bookID: bookID)
+        } else {
+            book.status = .queued
+            libraryStore.upsert(book)
+            queuedBookIDs.append(bookID)
+        }
+    }
+
+    private var pausedBookIDs: Set<UUID> = []
+
+    func isPaused(_ bookID: UUID) -> Bool {
+        libraryStore.book(id: bookID)?.status == .paused
+    }
+
+    func pauseProcessing(bookID: UUID) {
+        guard activeBookID == bookID || queuedBookIDs.contains(bookID) else { return }
+        pausedBookIDs.insert(bookID)
+        if activeBookID == bookID {
+            tasks[bookID]?.cancel()
+        } else if let index = queuedBookIDs.firstIndex(of: bookID) {
+            queuedBookIDs.remove(at: index)
+            if var book = libraryStore.book(id: bookID) {
+                book.status = .paused
+                libraryStore.upsert(book)
+            }
+        }
+    }
+
+    func resumeProcessing(bookID: UUID) {
+        guard let book = libraryStore.book(id: bookID), book.status == .paused || book.status == .failed else { return }
+        enqueue(bookID: bookID)
+    }
+
+    /// Removes a book from the queue (if merely waiting) or cancels it (if
+    /// actively running), then automatically promotes the next queued book.
+    /// Cancellation rolls back progress and cleans up intermediate chapter audio.
+    func cancelProcessing(bookID: UUID) {
+        pausedBookIDs.remove(bookID)
+        if activeBookID == bookID {
+            tasks[bookID]?.cancel()
+            // Keep the slot occupied until its subprocesses have actually
+            // terminated and runFullPipeline has unwound.
+        } else if let index = queuedBookIDs.firstIndex(of: bookID) {
+            queuedBookIDs.remove(at: index)
+            if var book = libraryStore.book(id: bookID) {
+                book.status = .needsReview
+                resetBookAudioState(&book)
+                libraryStore.upsert(book)
+            }
+        } else if var book = libraryStore.book(id: bookID), book.status == .paused || book.status == .failed {
+            book.status = .needsReview
+            resetBookAudioState(&book)
+            libraryStore.upsert(book)
+        }
+    }
+
+    private func resetBookAudioState(_ book: inout BookProject) {
+        ChapterAudioStore.removeChapterAudio(bookID: book.id)
+        for i in book.chapters.indices {
+            book.chapters[i].audioStatus = .pending
+            book.chapters[i].audioFileURL = nil
+            book.chapters[i].audioDurationSeconds = nil
+            book.chapters[i].audioSegments = nil
+            book.chapters[i].lastError = nil
+        }
+        if book.mode == .summary, let source = book.sourceChapters {
+            book.chapters = source
+        }
+        book.currentStage = nil
+        book.lastErrorMessage = nil
+    }
+
+    func moveQueuedBook(id: UUID, toIndex targetIndex: Int) {
+        guard let sourceIndex = queuedBookIDs.firstIndex(of: id) else { return }
+        let item = queuedBookIDs.remove(at: sourceIndex)
+        let insertionIndex = min(max(targetIndex, 0), queuedBookIDs.count)
+        queuedBookIDs.insert(item, at: insertionIndex)
+    }
+
+    private func startActive(bookID: UUID) {
+        activeBookID = bookID
+        let task = Task { [weak self] in
+            await self?.runFullPipeline(bookID: bookID)
+            await MainActor.run {
+                guard let self else { return }
+                self.progress[bookID] = nil
+                if self.activeBookID == bookID {
+                    self.activeBookID = nil
+                }
+                self.tasks[bookID] = nil
+                self.startNextQueuedIfIdle()
+            }
+        }
+        tasks[bookID] = task
+    }
+
+    private func startNextQueuedIfIdle() {
+        guard activeBookID == nil, !queuedBookIDs.isEmpty else { return }
+        let nextID = queuedBookIDs.removeFirst()
+        guard var book = libraryStore.book(id: nextID) else {
+            startNextQueuedIfIdle()
+            return
+        }
+        book.status = .processing
+        libraryStore.upsert(book)
+        startActive(bookID: nextID)
+    }
+
+    var isAnyBookActive: Bool { activeBookID != nil }
+
+    func regenerateChapter(bookID: UUID, chapterID: UUID) {
+        guard activeBookID == nil else { return }
+        activeBookID = bookID
+
+        let task = Task { [weak self] in
+            await self?.runSingleChapterRegeneration(bookID: bookID, chapterID: chapterID)
+            await MainActor.run {
+                guard let self else { return }
+                self.progress[bookID] = nil
+                if self.activeBookID == bookID {
+                    self.activeBookID = nil
+                }
+                self.tasks[bookID] = nil
+                self.startNextQueuedIfIdle()
+            }
+        }
+        tasks[bookID] = task
+    }
+
+    /// If summarization mode was selected but the LLM endpoint turns out to
+    /// be unreachable, this switches the book to transcription mode so the
+    /// user can continue without losing their place — no silent failure, no
+    /// dead end.
+    func fallBackToTranscription(bookID: UUID) {
+        guard var book = libraryStore.book(id: bookID) else { return }
+        if let sourceChapters = book.sourceChapters { book.chapters = sourceChapters }
+        book.mode = .transcription
+        book.lastErrorMessage = nil
+        book.status = .needsReview
+        libraryStore.upsert(book)
+    }
+
+    // MARK: - Figures (image descriptions)
+
+    /// Whether this run narrates/summarizes figure descriptions at all.
+    private func describesFigures(_ book: BookProject) -> Bool {
+        let settings = settingsStore.settings
+        guard book.describeImages ?? settings.describeImagesWithVisionModel else { return false }
+        return book.mode == .summary ? settings.imageDescriptionScope.includesSummaryMode : settings.imageDescriptionScope.includesTranscriptionMode
+    }
+
+    /// Text as it is actually consumed (narrated or summarized): figure
+    /// descriptions become plain "Abbildung: …" paragraphs at their place,
+    /// or vanish when figures are off for this run. Stored chapter text
+    /// keeps its markers so a later run (other mode, other setting) can
+    /// decide again without re-importing or re-describing.
+    private func narrationText(for chapter: Chapter, book: BookProject) -> String {
+        Self.narration(for: chapter, describeFigures: describesFigures(book), removeReferences: settingsStore.settings.removeCrossReferences)
+    }
+
+    nonisolated private static func narration(for chapter: Chapter, describeFigures: Bool, removeReferences: Bool) -> String {
+        if let summary = chapter.summarizedText { return ImageDescriptionMarker.unwrap(summary) }
+        let resolved = describeFigures ? ImageDescriptionMarker.unwrap(chapter.cleanedText) : ImageDescriptionMarker.stripBlocks(from: chapter.cleanedText)
+        return removeReferences ? PDFTextbookCleaner.removeCrossReferences(resolved) : resolved
+    }
+
+    /// "Abbildung: Die Abbildung zeigt …" reads clumsily — drop such
+    /// openings (the label already announces the figure).
+    nonisolated static func withoutFillerOpening(_ text: String) -> String {
+        let pattern = #"^(Die|Diese|Das|Dieses)\s+(Abbildung|Bild|Grafik|Aufnahme|Darstellung|Illustration)\s+(zeigt|stellt dar|veranschaulicht|präsentiert)\s*:?\s*|^(The|This)\s+(image|figure|picture|illustration)\s+(shows|displays|depicts|illustrates)\s*:?\s*"#
+        guard let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return text }
+        let rest = text[range.upperBound...]
+        guard let first = rest.first else { return text }
+        return first.uppercased() + rest.dropFirst()
+    }
+
+    private func figureLabel(for book: BookProject) -> String {
+        let custom = settingsStore.settings.imageDescriptionLabel.trimmingCharacters(in: .whitespaces)
+        if !custom.isEmpty { return custom.hasSuffix(":") ? custom : custom + ":" }
+        return book.outputLanguageCode.hasPrefix("de") ? "Abbildung:" : "Figure:"
+    }
+
+    private func languageName(for book: BookProject) -> String {
+        LanguageDetector.englishName(book.outputLanguageCode)
+    }
+
+    /// Figures that still need a description of the required length,
+    /// after the current size filters. Pure function, runs off the main
+    /// thread (opens the PDF only to read page sizes).
+    private struct FigurePlan: Sendable {
+        var pending: [FigureReference] = []
+        var rejectedKeys: Set<String> = []
+        var total = 0
+        var cached = 0
+    }
+
+    nonisolated private static func planFigures(texts: [String], length: FigureDescriptionLength, sourceURL: URL, isPDF: Bool, settings: AppSettings) -> FigurePlan {
+        autoreleasepool {
+            var plan = FigurePlan()
+            var seen = Set<String>()
+            var candidates: [FigureReference] = []
+            for text in texts {
+                for figure in ImageDescriptionMarker.figures(in: text) where !seen.contains(figure.ref.key) {
+                    seen.insert(figure.ref.key)
+                    if figure.existing == length { plan.cached += 1 } else { candidates.append(figure.ref) }
+                }
+            }
+            plan.total = seen.count
+            let document = isPDF && !candidates.isEmpty ? PDFDocument(url: sourceURL) : nil
+            let thresholds = PDFFigureDetector.Thresholds(
+                minimumPixelSize: settings.minimumImageDimensionForVisionPass,
+                minimumAreaFraction: settings.minimumImageAreaPercent / 100,
+                minimumKilobytes: settings.minimumImageKilobytes,
+                maximumAspectRatio: settings.maximumImageAspectRatio,
+                detectVectorFigures: settings.detectVectorFigures
+            )
+            for ref in candidates {
+                if ref.kind == "vector" && !settings.detectVectorFigures { plan.rejectedKeys.insert(ref.key); continue }
+                var pageArea: CGFloat = 0
+                if let page = ref.page, let bounds = document?.page(at: page)?.bounds(for: .mediaBox) { pageArea = bounds.width * bounds.height }
+                let figure = PDFFigureDetector.Figure(
+                    rect: ref.cgRect ?? CGRect(x: 0, y: 0, width: 1000, height: 1000),
+                    kind: ref.kind == "vector" ? .vector : .raster,
+                    pixelWidth: ref.pixelWidth ?? 0, pixelHeight: ref.pixelHeight ?? 0,
+                    encodedBytes: ref.encodedBytes ?? Int.max
+                )
+                var t = thresholds
+                if pageArea == 0 { t.minimumAreaFraction = 0; pageArea = 1 }
+                if PDFFigureDetector.passes(figure, pageArea: pageArea, thresholds: t) {
+                    plan.pending.append(ref)
+                } else {
+                    plan.rejectedKeys.insert(ref.key)
+                }
+            }
+            return plan
+        }
+    }
+
+    /// Loads/renders one figure's image. Runs in a child task (never on
+    /// the main thread); opens its own PDFDocument because PDFKit
+    /// documents must not be shared across threads.
+    nonisolated private static func figureImage(_ ref: FigureReference, sourceURL: URL, archiveRoot: URL?) -> Data? {
+        autoreleasepool {
+            switch ref.source {
+            case .pdf:
+                guard let page = ref.page, let rect = ref.cgRect, let document = PDFDocument(url: sourceURL) else { return nil }
+                return FigureImageLoader.renderPDFRegion(document: document, pageIndex: page, rect: rect)
+            case .epub:
+                guard let archiveRoot, let path = ref.path else { return nil }
+                return FigureImageLoader.loadArchiveImage(archiveRoot: archiveRoot, path: path)
+            }
+        }
+    }
+
+    /// Describes every figure that doesn't yet have a description of the
+    /// length this run needs (full for narration, short for the
+    /// summarizer), in parallel, and stores it at the figure's position in
+    /// both `chapters` and `sourceChapters`. Placement is purely positional
+    /// — the description replaces the figure's own marker — so no model is
+    /// ever asked to place anything. All heavy work (marker scan, PDF
+    /// rendering, network, text rewrite) happens off the main thread; the
+    /// main actor only receives progress, so the UI stays responsive and a
+    /// cancel takes effect immediately.
+    private func describeFigures(in book: inout BookProject, logger: RunLogger) async {
+        guard describesFigures(book) else { return }
+        let settings = settingsStore.settings
+        let length: FigureDescriptionLength = book.mode == .summary ? .short : .full
+        let texts = book.chapters.map(\.cleanedText) + (book.sourceChapters ?? []).map(\.cleanedText)
+        let sourceURL = book.sourceURL
+        let isPDF = book.sourceType == .pdf
+
+        let plan = await Task.detached(priority: .userInitiated) {
+            PipelineController.planFigures(texts: texts, length: length, sourceURL: sourceURL, isPDF: isPDF, settings: settings)
+        }.value
+        guard plan.total > 0, !Task.isCancelled else { return }
+        let pending = plan.pending
+
+        if !pending.isEmpty {
+            logger.log("Prüfe \(settings.llmProvider.displayName)-Server vor dem Bildpass …")
+            let client = LLMClient(settings: settings)
+            var reachable = false
+            do {
+                _ = try await client.listModels()
+                reachable = true
+            } catch {
+                if settings.autoStartOMLX && settings.llmProvider == .omlx {
+                    logger.log("oMLX-Server läuft nicht. Versuche automatischen Start (autoStartOMLX aktiv) …")
+                    if await OMLXLifecycleManager.startServer(timeout: 45) {
+                        logger.log("oMLX-Server erfolgreich im Hintergrund gestartet.")
+                        do {
+                            _ = try await client.listModels()
+                            reachable = true
+                        } catch {
+                            reachable = false
+                        }
+                    } else {
+                        logger.log("Automatischer Start von oMLX fehlgeschlagen.")
+                    }
+                }
+            }
+            if !reachable {
+                let errorMsg = "\(settings.llmProvider.displayName)-Server ist nicht erreichbar (\(settings.activeLLMBaseURL)). Bitte starte \(settings.llmProvider.displayName) und setze die Verarbeitung fort."
+                logger.log("Fehler: \(errorMsg)")
+                book.status = .paused
+                book.lastErrorMessage = errorMsg
+                libraryStore.upsert(book)
+                return
+            }
+        }
+
+        book.currentStage = .describingImages
+        libraryStore.upsert(book)
+        enterStage(book.id, .describingImages, detail: "\(pending.count) Abbildungen")
+        updateProgress(book.id) { $0.imagesTotal = pending.count; $0.imagesDone = 0 }
+        logger.log("Bildpass: \(plan.total) Abbildungen, davon \(plan.cached) bereits beschrieben, \(plan.rejectedKeys.count) unter den Größenfiltern, \(pending.count) zu beschreiben (\(length == .full ? "ausführlich" : "kurz"), \(settings.visionParallelRequests) parallel, Sprache: \(LanguageDetector.displayName(book.outputLanguageCode))).")
+
+        var archiveRoot: URL?
+        if book.sourceType == .epub, !pending.isEmpty {
+            archiveRoot = await Task.detached { try? EPUBExtractor.unzip(epubURL: sourceURL) }.value
+            if archiveRoot == nil { logger.log("  EPUB konnte für den Bildpass nicht entpackt werden — Bilder werden übersprungen.") }
+        }
+        defer { if let archiveRoot { try? FileManager.default.removeItem(at: archiveRoot) } }
+
+        let prompt = (length == .full ? settings.promptTemplates.visionPrompt : settings.promptTemplates.visionPromptShort)
+            .replacingOccurrences(of: "{{language}}", with: languageName(for: book))
+        let bookID = book.id
+        let root = archiveRoot
+        var results: [String: String?] = [:] // key → description (nil = SKIP)
+        let parallel = max(1, settings.visionParallelRequests)
+        await withTaskGroup(of: (String, String??).self) { group in
+            var next = 0
+            var done = 0
+            func launch(_ ref: FigureReference) {
+                var context = ""
+                if let caption = ref.caption, !caption.isEmpty { context += "Its caption in the book reads: \"\(caption)\"." }
+                if let alt = ref.altText, !alt.isEmpty { context += " Its alternative text reads: \"\(alt)\"." }
+                let filledPrompt = prompt.replacingOccurrences(of: "{{caption}}", with: context)
+                group.addTask {
+                    guard !Task.isCancelled, let image = PipelineController.figureImage(ref, sourceURL: sourceURL, archiveRoot: root) else { return (ref.key, .none) }
+                    do {
+                        let text = try await VisionDescriber.describe(jpegData: image, prompt: filledPrompt, settings: settings)
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return (ref.key, .some(trimmed.uppercased().hasPrefix("SKIP") ? nil : PipelineController.withoutFillerOpening(trimmed)))
+                    } catch {
+                        return (ref.key, .none)
+                    }
+                }
+            }
+            while next < pending.count && next < parallel { launch(pending[next]); next += 1 }
+            while let (key, outcome) = await group.next() {
+                if Task.isCancelled { group.cancelAll(); break }
+                done += 1
+                switch outcome {
+                case .some(.some(let text)): results[key] = text; logger.log("  [\(done)/\(pending.count)] → \"\(text.prefix(90))…\"")
+                case .some(.none): results[key] = .some(nil); logger.log("  [\(done)/\(pending.count)] → übersprungen (dekorativ)")
+                case .none: logger.log("  [\(done)/\(pending.count)] → fehlgeschlagen (Bild nicht ladbar oder Modell ohne Bildverständnis) — wird beim nächsten Lauf erneut versucht")
+                }
+                let snapshot = done
+                updateProgress(bookID) {
+                    $0.imagesDone = snapshot
+                    $0.phaseFraction = Double(snapshot) / Double(max(pending.count, 1))
+                    $0.detail = "Abbildung \(snapshot)/\(pending.count)"
+                }
+                if next < pending.count { launch(pending[next]); next += 1 }
+            }
+        }
+
+        // Even after a cancel, keep what was already described (cached for
+        // the next run) — the text rewrite also runs off the main thread.
+        let label = figureLabel(for: book)
+        let finished = results
+        let chapterTexts = book.chapters.map(\.cleanedText)
+        let sourceTexts = book.sourceChapters?.map(\.cleanedText)
+        let rewritten = await Task.detached(priority: .userInitiated) { () -> ([String], [String]?) in
+            func resolve(_ text: String) -> String {
+                ImageDescriptionMarker.resolveFigures(in: text, dropLegacy: true) { ref, _ in
+                    guard let outcome = finished[ref.key], let description = outcome else { return .keep }
+                    return .describe("\(label) \(description)", length)
+                }
+            }
+            return (chapterTexts.map(resolve), sourceTexts.map { $0.map(resolve) })
+        }.value
+        for index in book.chapters.indices where index < rewritten.0.count {
+            book.chapters[index].cleanedText = rewritten.0[index]
+        }
+        if var sources = book.sourceChapters, let texts = rewritten.1 {
+            for index in sources.indices where index < texts.count { sources[index].cleanedText = texts[index] }
+            book.sourceChapters = sources
+        }
+        let described = results.values.compactMap { $0 }.count
+        logger.log("Bildpass \(Task.isCancelled ? "abgebrochen" : "abgeschlossen"): \(described) beschrieben, \(results.values.filter { $0 == nil }.count) als dekorativ übersprungen, \(pending.count - results.count) offen/fehlgeschlagen.")
+        libraryStore.upsert(book)
+    }
+
+    // MARK: - Full pipeline
+
+    /// Book-wide numbers needed before a run starts. Computed off the main
+    /// thread: decoding every figure marker and measuring a 700-page
+    /// textbook used to freeze the UI at the start of a run.
+    private struct RunAnalysis: Sendable {
+        var hasFigures: Bool
+        var pendingFigureKeys: Int
+        var sourceCharacters: Int
+        var detectedLanguage: String?
+    }
+
+    nonisolated private static func analyze(_ book: BookProject, redetectLanguage: Bool) -> RunAnalysis {
+        let source = book.sourceChapters ?? book.chapters
+        let figures = source.flatMap { ImageDescriptionMarker.figures(in: $0.cleanedText) }
+        return RunAnalysis(
+            hasFigures: !figures.isEmpty,
+            pendingFigureKeys: Set(figures.filter { $0.existing == nil }.map(\.ref.key)).count,
+            sourceCharacters: source.reduce(0) { $0 + ImageDescriptionMarker.stripBlocks(from: $1.cleanedText).count },
+            detectedLanguage: redetectLanguage ? LanguageDetector.detectLanguageCode(chapterTexts: source.map(\.cleanedText)) : nil
+        )
+    }
+
+    private struct PendingSynthesisItem: Sendable {
+        let index: Int
+        let order: Int
+        let title: String
+        let text: String
+        let outputURL: URL
+    }
+
+    private struct ChapterSynthesisResult: Sendable {
+        let index: Int
+        let result: TTSSynthesisResult
+    }
+
+    private func markChapterSynthesizing(bookID: UUID, index: Int, completedCount: Int, chaptersCount: Int) {
+        if var book = libraryStore.book(id: bookID), index < book.chapters.count {
+            book.chapters[index].audioStatus = .synthesizing
+            libraryStore.upsert(book)
+            updateProgress(bookID) {
+                $0.chapterIndex = index
+                $0.chapterTitle = book.chapters[index].title
+                $0.detail = "Kapitel \(completedCount + 1)/\(chaptersCount)"
+            }
+        }
+    }
+
+    private func recordChapterDone(
+        bookID: UUID,
+        index: Int,
+        result: TTSSynthesisResult,
+        synthesisStart: Date,
+        totalCharacters: Int,
+        chapterLengths: [Int],
+        completedCount: Int,
+        chaptersCount: Int
+    ) -> ChapterAudioFile? {
+        guard var book = libraryStore.book(id: bookID), index < book.chapters.count else { return nil }
+        book.chapters[index].audioFileURL = result.audioFileURL
+        book.chapters[index].audioDurationSeconds = result.durationSeconds
+        book.chapters[index].audioSegments = result.segments
+        book.chapters[index].audioStatus = .ready
+        libraryStore.upsert(book)
+
+        let audioFile = ChapterAudioFile(chapter: book.chapters[index], url: result.audioFileURL)
+
+        updateProgress(bookID) { p in
+            p.finishedAudioSeconds += result.durationSeconds
+            p.currentChapterAudioSeconds = 0
+            p.chapterFraction = 1
+            p.synthesisWallSeconds = Date().timeIntervalSince(synthesisStart)
+            if totalCharacters > 0 {
+                let readyIndices = Set(book.chapters.enumerated().filter { $0.element.audioStatus == .ready }.map { $0.offset })
+                let finishedChars = readyIndices.reduce(0) { sum, idx in idx < chapterLengths.count ? sum + chapterLengths[idx] : sum }
+                p.phaseFraction = Double(finishedChars) / Double(totalCharacters)
+            }
+            p.detail = "Kapitel \(completedCount)/\(chaptersCount) fertig"
+        }
+        return audioFile
+    }
+
+    private func runFullPipeline(bookID: UUID) async {
+        guard var initialBook = libraryStore.book(id: bookID) else { return }
+        let logger = RunLogger(bookID: bookID, bookTitle: initialBook.title)
+        defer { logger.close() }
+        var settings = settingsStore.settings
+
+        // Phase 1 "Einlesen" is visible immediately, while the heavy
+        // preparation runs in the background.
+        var initialProgress = RunProgress()
+        initialProgress.phases = RunProgress.phases(hasImagePass: describesFigures(initialBook), hasSummary: initialBook.mode == .summary)
+        initialProgress.stage = .extracting
+        initialProgress.detail = "Buch wird eingelesen und analysiert …"
+        progress[bookID] = initialProgress
+        logger.onLine = { [weak self] message in
+            Task { @MainActor in self?.updateProgress(bookID) { $0.appendLog(message) } }
+        }
+        logger.log("Einlesen: Abbildungen, Textumfang und Sprache werden ermittelt …")
+
+        let snapshot = initialBook
+        let analysis = await Task.detached(priority: .userInitiated) {
+            PipelineController.analyze(snapshot, redetectLanguage: snapshot.languageOverride == nil)
+        }.value
+        if let language = analysis.detectedLanguage, language != initialBook.detectedLanguageCode {
+            logger.log("Sprache neu erkannt: \(LanguageDetector.displayName(language)) (vorher \(initialBook.detectedLanguageCode.map(LanguageDetector.displayName) ?? "unbekannt")).")
+            initialBook.detectedLanguageCode = language
+            if var stored = libraryStore.book(id: bookID) {
+                stored.detectedLanguageCode = language
+                libraryStore.upsert(stored)
+            }
+        }
+        logger.log("Sprache: \(LanguageDetector.displayName(initialBook.languageCode))\(initialBook.mode == .summary ? ", Zusammenfassung auf \(LanguageDetector.displayName(initialBook.outputLanguageCode))" : "").")
+
+        updateProgress(bookID) { p in
+            p.phases = RunProgress.phases(hasImagePass: self.describesFigures(initialBook) && analysis.hasFigures, hasSummary: initialBook.mode == .summary)
+            p.plannedImages = self.describesFigures(initialBook) ? analysis.pendingFigureKeys : 0
+            p.plannedSummaryCharacters = initialBook.mode == .summary ? analysis.sourceCharacters : 0
+            // Measured: summaries keep ~35–60 % of the source.
+            p.plannedNarrationCharacters = initialBook.mode == .summary ? Int(Double(analysis.sourceCharacters) * 0.5) : analysis.sourceCharacters
+            p.charactersPerAudioSecond = 15 * max(initialBook.speechSpeed, 0.1)
+            p.expectedRealTimeFactor = RunProgress.defaultRealTimeFactor(for: initialBook.engineID)
+            p.defaultSecondsPerImage = 7 / Double(max(settings.visionParallelRequests, 1)) * 1.3
+            p.phaseFraction = 1
+        }
+
+        do {
+            var book = initialBook
+            try Task.checkCancellation()
+
+            // Transcription mode always reflects the true original document
+            // structure — if a previous run already replaced `chapters` with
+            // an AI-derived structure, restore the pristine snapshot first.
+            if book.mode == .transcription, let sourceChapters = book.sourceChapters {
+                book.chapters = sourceChapters
+            }
+
+            // Run image description pass if placeholders exist in the document
+            await describeFigures(in: &book, logger: logger)
+            if book.status == .paused {
+                logger.log("Verarbeitung pausiert wegen nicht erreichbarem Bildpass-Server.")
+                return
+            }
+            try Task.checkCancellation()
+            libraryStore.upsert(book)
+
+            if book.mode == .summary {
+                let alreadySummarized = book.sourceChapters != nil && !book.chapters.isEmpty && book.chapters.allSatisfy { $0.summarizedText != nil }
+                if !alreadySummarized {
+                    book.currentStage = .summarizing
+                    libraryStore.upsert(book)
+                    enterStage(bookID, .summarizing, detail: "Verbinde mit \(settings.llmProvider.displayName) …")
+                    logger.log("Modus: Zusammenfassung — prüfe LLM-Endpoint (\(settings.llmProvider.displayName), Modell \(settings.activeLLMModel)) …")
+                    var client = SummarizerClient(settings: settings)
+                    var connectionResult = await client.testConnection()
+                    if case .failure = connectionResult, settings.autoStartOMLX && settings.llmProvider == .omlx {
+                        logger.log("oMLX-Server läuft nicht. Versuche automatischen Start (autoStartOMLX aktiv) …")
+                        if await OMLXLifecycleManager.startServer(timeout: 45) {
+                            logger.log("oMLX-Server erfolgreich im Hintergrund gestartet.")
+                            connectionResult = await client.testConnection()
+                        } else {
+                            logger.log("Automatischer Start von oMLX fehlgeschlagen.")
+                        }
+                    }
+                    switch connectionResult {
+                    case .failure(let error):
+                        logger.log("LLM-Endpoint nicht erreichbar: \(error.localizedDescription)")
+                        let errorMsg = "LLM-Endpoint nicht erreichbar (\(error.localizedDescription)). Bitte \(settings.llmProvider.displayName) starten oder im Transkriptions-Modus fortfahren."
+                        book.status = .paused
+                        book.lastErrorMessage = errorMsg
+                        libraryStore.upsert(book)
+                        return
+                    case .success(let models):
+                        // No model chosen yet (fresh oMLX setup): pick one once
+                        // and remember it, instead of failing the run.
+                        if settings.activeLLMModel.isEmpty, let preferred = LLMClient.preferredModel(from: models, hint: settings.llmModel) {
+                            settingsStore.settings.activeLLMModel = preferred
+                            settings = settingsStore.settings
+                            client = SummarizerClient(settings: settings)
+                            logger.log("Kein Modell eingestellt — verwende \(preferred).")
+                        }
+                        // Catch a stale model ID (model swapped/removed on the
+                        // server) up front with a clear message instead of an
+                        // opaque HTTP error from the first chat call.
+                        if !models.isEmpty, !models.contains(settings.activeLLMModel) {
+                            let message = "Modell „\(settings.activeLLMModel)“ ist bei \(settings.llmProvider.displayName) nicht verfügbar. Verfügbar: \(models.prefix(8).joined(separator: ", ")). Bitte unter Einstellungen → LLM ein Modell wählen."
+                            logger.log(message)
+                            book.status = .failed
+                            book.lastErrorMessage = message
+                            libraryStore.upsert(book)
+                            return
+                        }
+                    }
+
+                    // Snapshot the true original chapters exactly once — before
+                    // `chapters` ever gets replaced by an AI-derived structure —
+                    // so a later re-run always re-summarizes the real source
+                    // text, never a previous AI restructuring.
+                    if book.sourceChapters == nil {
+                        book.sourceChapters = book.chapters
+                    }
+                    let sourceChapters = book.sourceChapters ?? book.chapters
+
+                    for index in book.chapters.indices {
+                        book.chapters[index].audioStatus = .summarizing
+                    }
+                    libraryStore.upsert(book)
+
+                    let contextWindow = await LLMClient(settings: settings).activeContextWindow()
+                    let budget = settings.effectiveSummarizationBudget(for: book.documentType, override: book.summarizationBudget, contextWindow: contextWindow)
+                    let describeForSummary = describesFigures(book)
+                    let removeReferencesForSummary = settingsStore.settings.removeCrossReferences
+                    let inputs = await Task.detached(priority: .userInitiated) {
+                        sourceChapters.map { chapter -> (title: String, text: String) in
+                            var plain = chapter
+                            plain.summarizedText = nil
+                            return (chapter.title, PipelineController.narration(for: plain, describeFigures: describeForSummary, removeReferences: removeReferencesForSummary))
+                        }
+                    }.value
+                    logger.log("Fasse \(sourceChapters.count) Original-Kapitel zusammen (Dokumenttyp: \(book.documentType.displayName), Kontextfenster: \(contextWindow.map { "\($0) Tokens" } ?? "unbekannt"), Ziel-Budget ~\(budget / 1000)k Zeichen pro Aufruf) …")
+                    let aiChapters = try await client.summarizeIntoChapters(
+                        bookTitle: book.title,
+                        chapters: inputs,
+                        documentType: book.documentType,
+                        characterBudget: budget,
+                        contextWindow: contextWindow,
+                        outputLanguage: book.summaryLanguageCode.map(LanguageDetector.englishName),
+                        onProgress: { message in logger.log("  \(message)") },
+                        onStructuredProgress: { [weak self] snapshot in
+                            Task { @MainActor in
+                                self?.updateProgress(bookID) {
+                                    $0.llmCallsDone = snapshot.completedCalls
+                                    $0.llmCallsTotal = snapshot.totalCalls
+                                    $0.llmCharactersDone = snapshot.completedCharacters
+                                    $0.llmCharactersTotal = snapshot.totalCharacters
+                                    $0.llmTokensPerSecond = snapshot.lastTokensPerSecond ?? $0.llmTokensPerSecond
+                                    $0.phaseFraction = snapshot.totalCharacters > 0 ? Double(snapshot.completedCharacters) / Double(snapshot.totalCharacters) : 0
+                                    $0.detail = "LLM-Aufruf \(snapshot.completedCalls)/\(snapshot.totalCalls) fertig"
+                                }
+                            }
+                        }
+                    )
+
+                    try Task.checkCancellation()
+                    book.chapters = aiChapters.enumerated().map { index, result in
+                        Chapter(title: result.title, rawText: result.sourceText, cleanedText: result.sourceText, summarizedText: result.summarizedText, order: index)
+                    }
+                    logger.log("Neue KI-Kapitelstruktur: \(book.chapters.count) Kapitel (aus \(sourceChapters.count) Original-Kapiteln).")
+                    libraryStore.upsert(book)
+                } else {
+                    logger.log("Modus: Zusammenfassung — bereits zusammengefasst (\(book.chapters.count) Kapitel vorhanden). Fahre mit Synthese fort.")
+                }
+            }
+
+            if settingsStore.settings.autoUnloadOMLXAfterPass && settingsStore.settings.llmProvider == .omlx {
+                logger.log("Entlade oMLX-Server vor der Sprachsynthese, um Arbeitsspeicher freizugeben (autoUnloadOMLXAfterPass aktiv) …")
+                let stopped = await OMLXLifecycleManager.stopServer(timeout: 15)
+                if stopped {
+                    logger.log("oMLX-Server erfolgreich beendet — Unified Memory freigegeben.")
+                } else {
+                    logger.log("oMLX-Server konnte nicht beendet werden (möglicherweise bereits beendet).")
+                }
+            }
+
+            book.currentStage = .synthesizing
+            libraryStore.upsert(book)
+
+            let engine = TTSEngineFactory.engine(for: book.engineID, settings: settingsStore.settings)
+            guard await engine.isReady(voice: book.voice) else {
+                book.status = .failed
+                book.lastErrorMessage = "TTS-Engine ist nicht eingerichtet. Bitte in den Einstellungen unter Diagnose einrichten."
+                libraryStore.upsert(book)
+                return
+            }
+
+            enterStage(bookID, .synthesizing)
+            // Narration text of every chapter, prepared once in the background.
+            let chaptersSnapshot = book.chapters
+            let describe = describesFigures(book)
+            let removeReferences = settingsStore.settings.removeCrossReferences
+            let narrationTexts = await Task.detached(priority: .userInitiated) {
+                chaptersSnapshot.map { PipelineController.narration(for: $0, describeFigures: describe, removeReferences: removeReferences) }
+            }.value
+            try Task.checkCancellation()
+            let chapterLengths = narrationTexts.map(\.count)
+            let totalCharacters = chapterLengths.reduce(0, +)
+            let synthesisStart = Date()
+
+            var chapterAudioFiles: [ChapterAudioFile] = []
+            var alreadyDoneIndices: Set<Int> = []
+            var initialFinishedSeconds: Double = 0.0
+
+            for index in book.chapters.indices {
+                let chapter = book.chapters[index]
+                let fileURL = chapter.audioFileURL ?? ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat)
+                if chapter.audioStatus == .ready && FileManager.default.fileExists(atPath: fileURL.path) {
+                    alreadyDoneIndices.insert(index)
+                    let dur = chapter.audioDurationSeconds ?? 0
+                    initialFinishedSeconds += dur
+                    chapterAudioFiles.append(ChapterAudioFile(chapter: chapter, url: fileURL))
+                }
+            }
+
+            updateProgress(bookID) {
+                $0.chapterCount = chapterLengths.count
+                $0.chapterCharacterCounts = chapterLengths
+                $0.charactersPerAudioSecond = 15 * max(book.speechSpeed, 0.1)
+                $0.finishedAudioSeconds = initialFinishedSeconds
+                if totalCharacters > 0 && !alreadyDoneIndices.isEmpty {
+                    let finishedChars = alreadyDoneIndices.reduce(0) { $0 + chapterLengths[$1] }
+                    $0.phaseFraction = Double(finishedChars) / Double(totalCharacters)
+                }
+            }
+
+            let pendingIndices = book.chapters.indices.filter { !alreadyDoneIndices.contains($0) }
+            if pendingIndices.isEmpty {
+                logger.log("Alle \(book.chapters.count) Kapitel sind bereits synthetisiert. Fahre mit Verpackung fort.")
+            } else {
+                let parallelWorkers = max(1, min(settings.ttsParallelWorkers, 4))
+                logger.log("Synthese: \(book.chapters.count) Kapitel insgesamt, \(alreadyDoneIndices.count) bereits fertig, \(pendingIndices.count) zu synthetisieren (\(parallelWorkers) parallele Worker).")
+
+                let pendingItems: [PendingSynthesisItem] = pendingIndices.map { idx in
+                    let c = book.chapters[idx]
+                    return PendingSynthesisItem(
+                        index: idx,
+                        order: c.order,
+                        title: c.title,
+                        text: narrationTexts[idx],
+                        outputURL: ChapterAudioStore.chapterFileURL(bookID: bookID, order: c.order, format: book.outputFormat)
+                    )
+                }
+
+                let totalChapters = book.chapters.count
+                let voice = book.voice
+                let speed = book.speechSpeed
+
+                try await withThrowingTaskGroup(of: ChapterSynthesisResult.self) { group in
+                    var nextIndex = 0
+                    var completedCount = alreadyDoneIndices.count
+
+                    while nextIndex < pendingItems.count && nextIndex < parallelWorkers {
+                        let item = pendingItems[nextIndex]
+                        nextIndex += 1
+                        await self.markChapterSynthesizing(bookID: bookID, index: item.index, completedCount: completedCount, chaptersCount: totalChapters)
+                        logger.log("Starte Kapitel \(item.index + 1)/\(totalChapters): „\(item.title)“")
+                        group.addTask {
+                            try Task.checkCancellation()
+                            let result = try await engine.synthesize(
+                                text: item.text,
+                                voice: voice,
+                                speed: speed,
+                                outputURL: item.outputURL,
+                                onProgress: { event in
+                                    if case .segmentDone(let segIdx, let duration) = event {
+                                        logger.log("  Kapitel \(item.index + 1), Segment \(segIdx + 1) fertig (\(String(format: "%.1f", duration)) s Audio)")
+                                    }
+                                }
+                            )
+                            return ChapterSynthesisResult(index: item.index, result: result)
+                        }
+                    }
+
+                    while let item = try await group.next() {
+                        try Task.checkCancellation()
+                        completedCount += 1
+                        if let audioFile = await self.recordChapterDone(
+                            bookID: bookID,
+                            index: item.index,
+                            result: item.result,
+                            synthesisStart: synthesisStart,
+                            totalCharacters: totalCharacters,
+                            chapterLengths: chapterLengths,
+                            completedCount: completedCount,
+                            chaptersCount: totalChapters
+                        ) {
+                            chapterAudioFiles.append(audioFile)
+                            logger.log("[\(completedCount)/\(totalChapters)] Kapitel fertig: „\(audioFile.chapter.title)“ (\(String(format: "%.1f", item.result.durationSeconds)) s Audio)")
+                        }
+
+                        if nextIndex < pendingItems.count {
+                            let nextItem = pendingItems[nextIndex]
+                            nextIndex += 1
+                            await self.markChapterSynthesizing(bookID: bookID, index: nextItem.index, completedCount: completedCount, chaptersCount: totalChapters)
+                            logger.log("Starte Kapitel \(nextItem.index + 1)/\(totalChapters): „\(nextItem.title)“")
+                            group.addTask {
+                                try Task.checkCancellation()
+                                let result = try await engine.synthesize(
+                                    text: nextItem.text,
+                                    voice: voice,
+                                    speed: speed,
+                                    outputURL: nextItem.outputURL,
+                                    onProgress: { event in
+                                        if case .segmentDone(let segIdx, let duration) = event {
+                                            logger.log("  Kapitel \(nextItem.index + 1), Segment \(segIdx + 1) fertig (\(String(format: "%.1f", duration)) s Audio)")
+                                        }
+                                    }
+                                )
+                                return ChapterSynthesisResult(index: nextItem.index, result: result)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let refreshed = libraryStore.book(id: bookID) {
+                book = refreshed
+            }
+
+            chapterAudioFiles.sort { $0.chapter.order < $1.chapter.order }
+
+            book.currentStage = .packaging
+            libraryStore.upsert(book)
+            enterStage(bookID, .packaging, detail: book.outputFormat.displayName)
+            logger.log("Verpacke Ausgabe im Format \(book.outputFormat.displayName) …")
+
+            let outputDirectory = OutputPathResolver.resolveOutputDirectory(book: book, settings: settingsStore.settings)
+            let packager = ChapterPackagerFactory.packager(for: book.outputFormat, settings: settingsStore.settings)
+            let finalURL = try await packager.package(
+                book: book,
+                chapterAudioFiles: chapterAudioFiles,
+                outputDirectory: outputDirectory,
+                onProgress: { message in logger.log("  \(message)") }
+            )
+
+            book.outputDirectoryURL = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+            enterStage(bookID, .done)
+            book.currentStage = .done
+            book.status = .completed
+            book.logFileURL = logger.fileURL
+            libraryStore.upsert(book)
+            logger.log("=== Fertig. Ausgabe: \(finalURL.path) ===")
+        } catch is CancellationError {
+            let wasPaused = pausedBookIDs.remove(bookID) != nil
+            logger.log(wasPaused ? "Verarbeitung pausiert." : "Verarbeitung abgebrochen.")
+            if var book = libraryStore.book(id: bookID) {
+                book.status = wasPaused ? .paused : .needsReview
+                if !wasPaused {
+                    resetBookAudioState(&book)
+                }
+                libraryStore.upsert(book)
+            }
+        } catch {
+            logger.log("Fehlgeschlagen: \(error.localizedDescription)")
+            if var book = libraryStore.book(id: bookID) {
+                book.status = .failed
+                book.lastErrorMessage = error.localizedDescription
+                book.logFileURL = logger.fileURL
+                libraryStore.upsert(book)
+            }
+        }
+    }
+
+    // MARK: - Single-chapter regeneration
+
+    private func runSingleChapterRegeneration(bookID: UUID, chapterID: UUID) async {
+        guard var book = libraryStore.book(id: bookID),
+              let chapterIndex = book.chapters.firstIndex(where: { $0.id == chapterID }) else { return }
+
+        let logger = RunLogger(bookID: bookID, bookTitle: book.title + " (Kapitel-Neugenerierung)")
+        defer { logger.close() }
+
+
+        do {
+            let engine = TTSEngineFactory.engine(for: book.engineID, settings: settingsStore.settings)
+            guard await engine.isReady(voice: book.voice) else {
+                book.chapters[chapterIndex].audioStatus = .failed
+                book.chapters[chapterIndex].lastError = "TTS-Engine ist nicht eingerichtet."
+                libraryStore.upsert(book)
+                return
+            }
+
+            book.chapters[chapterIndex].audioStatus = .synthesizing
+            libraryStore.upsert(book)
+
+            let chapter = book.chapters[chapterIndex]
+            let outputURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat)
+
+            let result = try await engine.synthesize(
+                text: narrationText(for: chapter, book: book),
+                voice: book.voice,
+                speed: book.speechSpeed,
+                outputURL: outputURL,
+                onProgress: { event in
+                    if case .segmentDone(let index, let duration) = event {
+                        logger.log("Segment \(index) fertig (\(String(format: "%.1f", duration))s)")
+                    }
+                }
+            )
+
+            book.chapters[chapterIndex].audioFileURL = result.audioFileURL
+            book.chapters[chapterIndex].audioDurationSeconds = result.durationSeconds
+            book.chapters[chapterIndex].audioSegments = result.segments
+            book.chapters[chapterIndex].audioStatus = .ready
+            libraryStore.upsert(book)
+
+            // Re-package so the exported file reflects the updated chapter.
+            let readyChapterFiles = book.chapters
+                .filter { $0.audioStatus == .ready }
+                .compactMap { chapter -> ChapterAudioFile? in
+                    guard let url = chapter.audioFileURL else { return nil }
+                    return ChapterAudioFile(chapter: chapter, url: url)
+                }
+
+            guard readyChapterFiles.count == book.chapters.count else {
+                logger.log("Nicht alle Kapitel haben Audio — überspringe Neuverpackung.")
+                return
+            }
+
+            let outputDirectory = book.outputDirectoryURL ?? OutputPathResolver.resolveOutputDirectory(book: book, settings: settingsStore.settings)
+
+            let packager = ChapterPackagerFactory.packager(for: book.outputFormat, settings: settingsStore.settings)
+            let finalURL = try await packager.package(
+                book: book,
+                chapterAudioFiles: readyChapterFiles,
+                outputDirectory: outputDirectory,
+                onProgress: { message in logger.log(message) }
+            )
+            book.outputDirectoryURL = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+            libraryStore.upsert(book)
+        } catch {
+            logger.log("Fehler bei Kapitel-Neugenerierung: \(error.localizedDescription)")
+            book.chapters[chapterIndex].audioStatus = .failed
+            book.chapters[chapterIndex].lastError = error.localizedDescription
+            libraryStore.upsert(book)
+        }
+    }
+}
