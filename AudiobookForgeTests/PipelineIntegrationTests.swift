@@ -290,6 +290,10 @@ final class PipelineIntegrationTests: XCTestCase {
 
         let settingsStore = SettingsStore(fileURL: work.appendingPathComponent("settings.json"))
         settings.outputBaseFolderPath = work.appendingPathComponent("out").path
+        // This test inspects the chapter audio directory after packaging —
+        // since Phase 2 the pipeline deletes it by default
+        // (`keepChapterAudioAfterPackaging = false`), so keep it here.
+        settings.keepChapterAudioAfterPackaging = true
         settingsStore.settings = settings
         let libraryStore = LibraryStore(fileURL: work.appendingPathComponent("library.json"))
 

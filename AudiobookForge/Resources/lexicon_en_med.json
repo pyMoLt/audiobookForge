@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "language": "en",
+  "exact": [
+    { "from": "e.g.", "to": "for example" },
+    { "from": "i.e.", "to": "that is" },
+    { "from": "q.d.", "to": "once daily" },
+    { "from": "b.i.d.", "to": "twice daily" },
+    { "from": "p.o.", "to": "per os" }
+  ]
+}

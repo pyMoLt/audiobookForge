@@ -21,8 +21,8 @@ enum OutputFolderTemplate: String, Codable, CaseIterable, Identifiable, Sendable
 
     var displayName: String {
         switch self {
-        case .titleOnly: return "Nur Titel"
-        case .authorThenTitle: return "Autor/Titel"
+        case .titleOnly: return L("Nur Titel")
+        case .authorThenTitle: return L("Autor/Titel")
         }
     }
 
@@ -140,6 +140,14 @@ struct PromptTemplates: Codable, Sendable, Equatable {
     themselves — no meta-commentary, no preamble, no closing remarks, just the headings and the \
     narration text. Write in the same language as the source text, regardless of the language of \
     this instruction.
+
+    Some requests contain a block marked "[Context — already covered, do not summarize again]" \
+    after the text. It holds the end of the source that a previous request already condensed. \
+    Treat it as a seamless continuation of the text that follows: pick up exactly where it leads, \
+    do not summarize, re-introduce or repeat what the context already covers, and when the context \
+    ends in the middle of a topic write no new introduction — simply continue the narration. Never \
+    quote, mention or echo the context block in your output; it is orientation only. If the text \
+    begins with a heading, it starts a new section: begin a new heading as usual.
     """
 
     /// Earlier built-in defaults. A saved prompt identical to one of these
@@ -315,23 +323,23 @@ enum DocumentType: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .general: return "Allgemein"
-        case .book: return "Buch"
-        case .paper: return "Paper"
-        case .report: return "Report"
+        case .general: return L("Allgemein")
+        case .book: return L("Buch")
+        case .paper: return L("Paper")
+        case .report: return L("Report")
         }
     }
 
     var explanation: String {
         switch self {
         case .general:
-            return "Nutzt die manuellen Regler unten unverändert."
+            return L("Nutzt die manuellen Regler unten unverändert.")
         case .book:
-            return "Größere Mindestkapitelgröße (echte Buchkapitel sind selten winzig). Jedes Original-Kapitel bekommt genau einen Zusammenfassungs-Aufruf (bei sehr langen Kapiteln notfalls mehrere) — nie mehrere Kapitel in einem Aufruf gemischt, damit der Buch-Kapiteltitel als Überschrift erhalten bleibt."
+            return L("Größere Mindestkapitelgröße (echte Buchkapitel sind selten winzig). Jedes Original-Kapitel bekommt genau einen Zusammenfassungs-Aufruf (bei sehr langen Kapiteln notfalls mehrere) — nie mehrere Kapitel in einem Aufruf gemischt, damit der Buch-Kapiteltitel als Überschrift erhalten bleibt.")
         case .paper:
-            return "Kleinere Mindestkapitelgröße. Mehrere Original-Abschnitte werden gleichmäßig auf möglichst wenige, ähnlich große Aufrufe verteilt (±15% Toleranz) — die KI baut die eigentliche Fein-Gliederung dabei selbst per Zwischenüberschriften."
+            return L("Kleinere Mindestkapitelgröße. Mehrere Original-Abschnitte werden gleichmäßig auf möglichst wenige, ähnlich große Aufrufe verteilt (±15% Toleranz) — die KI baut die eigentliche Fein-Gliederung dabei selbst per Zwischenüberschriften.")
         case .report:
-            return "Mittlere Werte zwischen Buch und Paper — passend für Dokumente mit unregelmäßiger Abschnittsstruktur."
+            return L("Mittlere Werte zwischen Buch und Paper — passend für Dokumente mit unregelmäßiger Abschnittsstruktur.")
         }
     }
 }
@@ -352,9 +360,9 @@ enum ImageDescriptionScope: String, Codable, CaseIterable, Identifiable, Sendabl
 
     var displayName: String {
         switch self {
-        case .transcriptionOnly: return "Nur normales Transkript"
-        case .summaryOnly: return "Nur KI-Zusammenfassung"
-        case .both: return "Beides"
+        case .transcriptionOnly: return L("Nur normales Transkript")
+        case .summaryOnly: return L("Nur KI-Zusammenfassung")
+        case .both: return L("Beides")
         }
     }
 
@@ -381,10 +389,93 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// Number of chapters synthesized in parallel (1...4). 2 gives the optimal throughput on Apple Silicon.
     var ttsParallelWorkers: Int = 2
 
+    /// RAM Watchdog: monitors memory usage during TTS synthesis to protect macOS from system freezes.
+    var ramWatchdogEnabled: Bool = true
+    var ramWatchdogAuto: Bool = true
+    var ramWatchdogManualLimitGB: Double = 8.0
+
+    func autoRAMLimitGB(for engine: TTSEngineID, workers: Int) -> Double {
+        switch engine {
+        case .omniVoice:
+            return max(8.0, Double(workers) * 4.5 + 2.0)
+        case .kokoro, .kokoroGerman, .kokoroThorsten:
+            return max(6.0, Double(workers) * 2.0 + 2.0)
+        case .supertonic3:
+            return max(4.0, Double(workers) * 1.5 + 1.5)
+        case .piper:
+            return max(3.0, Double(workers) * 0.8 + 1.5)
+        case .appleSystem:
+            return 2.5
+        }
+    }
+
+    func effectiveRAMLimitGB(for engine: TTSEngineID, workers: Int) -> Double {
+        if ramWatchdogAuto {
+            return autoRAMLimitGB(for: engine, workers: workers)
+        } else {
+            return ramWatchdogManualLimitGB
+        }
+    }
+
+    func effectiveRAMLimitMB(for engine: TTSEngineID, workers: Int) -> Int {
+        Int(effectiveRAMLimitGB(for: engine, workers: workers) * 1024.0)
+    }
+
     /// When the extracted text looks German, prefer Piper/Thorsten over the
     /// globally configured default engine (still just a suggestion — always
     /// overridable per book in the review screen).
     var autoSelectEngineByLanguage: Bool = true
+
+    /// Language-level default voices (plan 8.1) — what the gallery marks
+    /// with a checkmark and what auto-selection assigns to new books.
+    /// Migrated from the old per-engine voice keys on first decode.
+    var defaultVoiceDE = VoiceID(engine: .piper, voice: "de_DE-thorsten-medium")
+    var defaultVoiceEN = VoiceID(engine: .kokoro, voice: "af_heart")
+
+    /// Speech flow pauses (plan 8.4, Erweitert → "Sprechfluss"), in
+    /// milliseconds. Engines insert the planned silence themselves so
+    /// read-along timing stays exact. sentencePauseMs 0 keeps the engine's
+    /// own natural gap between sentences.
+    var sentencePauseMs: Int = 0
+    var paragraphPauseMs: Int = 450
+    var headingPauseMs: Int = 800
+    var listItemPauseMs: Int = 250
+    var figurePauseMs: Int = 500
+    var chapterLeadInMs: Int = 600
+    var chapterTailMs: Int = 900
+    /// Deterministic per-chapter jitter (±percent) so pauses don't sound
+    /// mechanical while regenerated chapters stay byte-identical.
+    var pauseJitterPercent: Int = 10
+
+    /// Piper "Lebendigkeit" (plan 8.5): phoneme-duration variance and
+    /// pronunciation noise. Higher noise_scale = more prosodic variety.
+    var piperNoiseScale: Double = 0.667
+    var piperNoiseW: Double = 0.8
+
+    /// Which cloning-capable engine renders the user's cloned voices
+    /// ("clone:<id>" voice strings): OmniVoice.
+    var preferredCloneEngine: TTSEngineID = .omniVoice
+
+    /// OmniVoice (k2-fsa, MLX): iterative unmasking steps — fewer = faster,
+    /// lower quality. 32 is the model default, 16 the fast lane.
+    var omniVoiceSteps: Int = 32
+
+    /// Sidebar grouping (plan 9.5) — default groups by automatic topic.
+    var sidebarGrouping: SidebarGrouping = .topic
+
+    // Erscheinungsbild (plan 9.2)
+    var appearanceMode: AppearanceMode = .system
+    var textSizeStep: TextSizeStep = .system
+    var accent: AppAccent = .violet
+    /// 0–100 % material strength; 0 or "reduce transparency" = opaque.
+    var glassIntensity: Double = 80
+    var motionMode: MotionMode = .system
+    var flowBackgroundEnabled: Bool = true
+    /// UI language (v3.1): system, German or English.
+    var appLanguage: AppLanguage = .system
+    /// Energy profile on the power adapter / on battery (v3.2).
+    var powerModeOnAdapter: PowerMode = .maximum
+    var powerModeOnBattery: PowerMode = .balanced
 
     var llmBaseURL: String = "http://localhost:1234/v1"
     var llmAPIKey: String = ""
@@ -392,7 +483,7 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// oMLX is the primary backend; LM Studio stays selectable.
     var llmProvider: LLMProviderID = .omlx
     var omlxBaseURL: String = LLMProviderID.omlx.defaultBaseURL
-    var omlxAPIKey: String = ""
+    var omlxAPIKey: String = OMLXLocalConfig.serverAPIKey() ?? ""
     var omlxModel: String = ""
     /// Per-provider generation overrides; nil fields = server/model preset.
     /// Temperature 0.4 overrides the model preset by default (user choice
@@ -427,7 +518,12 @@ struct AppSettings: Codable, Sendable, Equatable {
     var autoUnloadOMLXAfterPass: Bool = false
 
     var activeLLMBaseURL: String { llmProvider == .omlx ? omlxBaseURL : llmBaseURL }
-    var activeLLMAPIKey: String { llmProvider == .omlx ? omlxAPIKey : llmAPIKey }
+    var activeLLMAPIKey: String {
+        if llmProvider == .omlx {
+            return omlxAPIKey.isEmpty ? (OMLXLocalConfig.serverAPIKey() ?? "") : omlxAPIKey
+        }
+        return llmAPIKey
+    }
     var activeLLMModel: String {
         get { llmProvider == .omlx ? omlxModel : llmModel }
         set { if llmProvider == .omlx { omlxModel = newValue } else { llmModel = newValue } }
@@ -445,6 +541,56 @@ struct AppSettings: Codable, Sendable, Equatable {
         case .kokoroGerman: return kokoroGermanVoice
         case .kokoroThorsten: return "thorsten"
         case .supertonic3: return supertonicVoice
+        case .omniVoice: return "default"
+        case .appleSystem: return AppleSpeechEngine.automaticVoice
+        }
+    }
+
+    /// Default voice ID for a language, following the stored default and
+    /// falling back to the catalog's choice.
+    func defaultVoiceID(forLanguage code: String) -> VoiceID {
+        if code.hasPrefix("de") { return defaultVoiceDE }
+        if code.hasPrefix("en") { return defaultVoiceEN }
+        return VoiceCatalog.defaultVoice(forLanguage: code)
+    }
+
+    /// Mirrors `LanguageDetector.suggestEngineAndVoice`'s old German path:
+    /// a German-capable configured engine kept its voice, everything else
+    /// used Piper (the old auto-select suggestion).
+    private static func migratedDefaultVoiceDE(from container: KeyedDecodingContainer<CodingKeys>, defaults d: AppSettings) throws -> VoiceID {
+        let engine = try container.decodeIfPresent(TTSEngineID.self, forKey: .ttsEngine) ?? d.ttsEngine
+        switch engine {
+        case .kokoroGerman:
+            let voice = try container.decodeIfPresent(String.self, forKey: .kokoroGermanVoice) ?? d.kokoroGermanVoice
+            return VoiceID(engine: .kokoroGerman, voice: voice)
+        case .kokoroThorsten:
+            return VoiceID(engine: .kokoroThorsten, voice: "thorsten")
+        case .supertonic3:
+            let voice = try container.decodeIfPresent(String.self, forKey: .supertonicVoice) ?? d.supertonicVoice
+            return VoiceID(engine: .supertonic3, voice: voice)
+        default:
+            let voice = try container.decodeIfPresent(String.self, forKey: .piperVoice) ?? d.piperVoice
+            return VoiceID(engine: .piper, voice: voice)
+        }
+    }
+
+    /// English default: the configured Kokoro voice (the historical global
+    /// default engine), or the configured Piper voice if it's an English
+    /// voice.
+    private static func migratedDefaultVoiceEN(from container: KeyedDecodingContainer<CodingKeys>, defaults d: AppSettings) throws -> VoiceID {
+        let engine = try container.decodeIfPresent(TTSEngineID.self, forKey: .ttsEngine) ?? d.ttsEngine
+        switch engine {
+        case .piper:
+            let voice = try container.decodeIfPresent(String.self, forKey: .piperVoice) ?? d.piperVoice
+            if voice.hasPrefix("en_") { return VoiceID(engine: .piper, voice: voice) }
+            let kokoro = try container.decodeIfPresent(String.self, forKey: .kokoroVoice) ?? d.kokoroVoice
+            return VoiceID(engine: .kokoro, voice: kokoro)
+        case .kokoroGerman, .kokoroThorsten, .supertonic3:
+            let kokoro = try container.decodeIfPresent(String.self, forKey: .kokoroVoice) ?? d.kokoroVoice
+            return VoiceID(engine: .kokoro, voice: kokoro)
+        default:
+            let kokoro = try container.decodeIfPresent(String.self, forKey: .kokoroVoice) ?? d.kokoroVoice
+            return VoiceID(engine: .kokoro, voice: kokoro)
         }
     }
 
@@ -455,6 +601,8 @@ struct AppSettings: Codable, Sendable, Equatable {
         case .kokoroGerman: return kokoroGermanSpeed
         case .kokoroThorsten: return kokoroThorstenSpeed
         case .supertonic3: return supertonicSpeed
+        case .omniVoice: return 1.0 // OmniVoice hat keinen Tempo-Parameter
+        case .appleSystem: return 1.0
         }
     }
 
@@ -488,6 +636,19 @@ struct AppSettings: Codable, Sendable, Equatable {
     var voicePreviewMaxCharacters: Int = 300
     var outputBaseFolderPath: String = AppSettings.defaultOutputBaseFolderPath
     var outputFolderTemplate: OutputFolderTemplate = .titleOnly
+    /// Keep the per-chapter audio files on disk after the book has been
+    /// packaged. Default false (Phase 2, plan 5.2): the verified packaged
+    /// M4B/M4A is the playback source, so the intermediate chapter audio
+    /// (≈ 29 MB per audio hour, ≈ 0.9 GB for a big textbook) is deleted to
+    /// save disk space. Only affects single-file outputs.
+    var keepChapterAudioAfterPackaging: Bool = false
+    /// Textbook box labels ("▶ Merke.", "Definition:", "Klinischer Fall")
+    /// in narration text (plan 6.1). The stored chapter text is never
+    /// modified — only what gets read aloud.
+    var boxLabelHandling: BoxLabelHandling = .remove
+    /// Read the numbers of numbered headings ("1.2 Therapie") aloud?
+    /// Default off (plan 6.4) — the numbering helps the eye, not the ear.
+    var speakHeadingNumbers: Bool = false
 
     var promptTemplates: PromptTemplates = PromptTemplates()
     var dependencyPathOverrides: DependencyPathOverrides = DependencyPathOverrides()
@@ -524,6 +685,19 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// boundaries into "Titel (Teil k/n)". ~12 000 characters ≈ 13 minutes
     /// of narration. 0 = off.
     var aiChapterMaxCharacters: Int = 12000
+
+    /// Minimum length of an AI chapter (plan 7.2): chapters below this are
+    /// merged with a neighbor of the same parent chapter after the model
+    /// has structured its answer — never across parents, never losing text.
+    /// 1 200 characters ≈ 75 seconds of narration; 0 = off.
+    var minAIChapterCharacters: Int = 1200
+
+    /// Continuity context between chunked summarization calls (plan 7.4):
+    /// every call except the first of a batch receives the tail of the
+    /// previous chunk's SOURCE so it can continue seamlessly instead of
+    /// restarting mid-topic. Costs a few hundred characters per call; off
+    /// restores the old behavior exactly.
+    var aiChapterContinuityEnabled: Bool = true
 
     /// How far a summarization batch may exceed the evenly distributed
     /// target size (see `SummarizerClient.buildBatches`), so a small
@@ -632,14 +806,23 @@ struct AppSettings: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case ttsEngine, kokoroVoice, kokoroSpeed, kokoroModelRepo
         case piperVoice, piperSpeed, autoSelectEngineByLanguage
+        case defaultVoiceDE, defaultVoiceEN
+        case sentencePauseMs, paragraphPauseMs, headingPauseMs, listItemPauseMs, figurePauseMs
+        case chapterLeadInMs, chapterTailMs, pauseJitterPercent
+        case piperNoiseScale, piperNoiseW
+        case preferredCloneEngine, omniVoiceSteps
+        case appearanceMode, textSizeStep, accent, glassIntensity, motionMode, flowBackgroundEnabled, appLanguage, powerModeOnAdapter, powerModeOnBattery
+        case sidebarGrouping
         case kokoroGermanVoice, kokoroGermanSpeed, kokoroThorstenSpeed
         case supertonicVoice, supertonicSpeed, supertonicSteps, supertonicChunkCharacters, supertonicPauseSeconds, ttsParallelWorkers
+        case ramWatchdogEnabled, ramWatchdogAuto, ramWatchdogManualLimitGB
         case llmBaseURL, llmAPIKey, llmModel, llmProvider
         case omlxBaseURL, omlxAPIKey, omlxModel
         case omlxGeneration, lmStudioGeneration, omlxParallelRequests, lmStudioParallelRequests
         case llmContextLimitTokens, llmRequestTimeoutSeconds, llmConnectionTimeoutSeconds
         case llmVisionTimeoutSeconds, llmVisionThinkingMode, llmVisionModelOverride, correctImplausibleServerPresets
         case defaultOutputFormat, outputBaseFolderPath, outputFolderTemplate
+        case keepChapterAudioAfterPackaging, boxLabelHandling, speakHeadingNumbers
         case mp3Quality, aacBitrateKbps, chapterAudioBitrateKbps, loudnessNormalizationEnabled
         case loudnessTargetLUFS, loudnessTruePeakDB, loudnessRangeLU
         case voicePreviewSentenceCount, voicePreviewMaxCharacters
@@ -647,6 +830,7 @@ struct AppSettings: Codable, Sendable, Equatable {
         case stripRecurringHeadersFooters, includeFootnotes
         case minimumChapterCharacters, targetChapterCharacters, excludeBackMatterSections
         case summarizationChunkCharacterBudget, aiChapterMaxCharacters, summarizationBatchTolerance
+        case minAIChapterCharacters, aiChapterContinuityEnabled
         case describeImagesWithVisionModel, minimumImageDimensionForVisionPass
         case imageDescriptionScope, defaultDocumentType
         case minimumImageAreaPercent, minimumImageKilobytes, maximumImageAspectRatio, detectVectorFigures
@@ -676,8 +860,44 @@ struct AppSettings: Codable, Sendable, Equatable {
         supertonicChunkCharacters = try container.decodeIfPresent(Int.self, forKey: .supertonicChunkCharacters) ?? d.supertonicChunkCharacters
         supertonicPauseSeconds = try container.decodeIfPresent(Double.self, forKey: .supertonicPauseSeconds) ?? d.supertonicPauseSeconds
         ttsParallelWorkers = try container.decodeIfPresent(Int.self, forKey: .ttsParallelWorkers) ?? d.ttsParallelWorkers
+        ramWatchdogEnabled = try container.decodeIfPresent(Bool.self, forKey: .ramWatchdogEnabled) ?? d.ramWatchdogEnabled
+        ramWatchdogAuto = try container.decodeIfPresent(Bool.self, forKey: .ramWatchdogAuto) ?? d.ramWatchdogAuto
+        ramWatchdogManualLimitGB = try container.decodeIfPresent(Double.self, forKey: .ramWatchdogManualLimitGB) ?? d.ramWatchdogManualLimitGB
 
         autoSelectEngineByLanguage = try container.decodeIfPresent(Bool.self, forKey: .autoSelectEngineByLanguage) ?? d.autoSelectEngineByLanguage
+
+        // Voice migration (plan 8.1): old settings have per-engine voice
+        // keys; the new defaults mirror what auto-selection used to pick,
+        // so behavior doesn't change for existing users.
+        defaultVoiceDE = try container.decodeIfPresent(VoiceID.self, forKey: .defaultVoiceDE)
+            ?? Self.migratedDefaultVoiceDE(from: container, defaults: d)
+        defaultVoiceEN = try container.decodeIfPresent(VoiceID.self, forKey: .defaultVoiceEN)
+            ?? Self.migratedDefaultVoiceEN(from: container, defaults: d)
+
+        sentencePauseMs = try container.decodeIfPresent(Int.self, forKey: .sentencePauseMs) ?? d.sentencePauseMs
+        paragraphPauseMs = try container.decodeIfPresent(Int.self, forKey: .paragraphPauseMs) ?? d.paragraphPauseMs
+        headingPauseMs = try container.decodeIfPresent(Int.self, forKey: .headingPauseMs) ?? d.headingPauseMs
+        listItemPauseMs = try container.decodeIfPresent(Int.self, forKey: .listItemPauseMs) ?? d.listItemPauseMs
+        figurePauseMs = try container.decodeIfPresent(Int.self, forKey: .figurePauseMs) ?? d.figurePauseMs
+        chapterLeadInMs = try container.decodeIfPresent(Int.self, forKey: .chapterLeadInMs) ?? d.chapterLeadInMs
+        chapterTailMs = try container.decodeIfPresent(Int.self, forKey: .chapterTailMs) ?? d.chapterTailMs
+        pauseJitterPercent = try container.decodeIfPresent(Int.self, forKey: .pauseJitterPercent) ?? d.pauseJitterPercent
+        piperNoiseScale = try container.decodeIfPresent(Double.self, forKey: .piperNoiseScale) ?? d.piperNoiseScale
+        piperNoiseW = try container.decodeIfPresent(Double.self, forKey: .piperNoiseW) ?? d.piperNoiseW
+        // Removed engine settings (old keys in settings.json are ignored by
+        // the decodeIfPresent pattern).
+        preferredCloneEngine = try container.decodeIfPresent(TTSEngineID.self, forKey: .preferredCloneEngine) ?? d.preferredCloneEngine
+        omniVoiceSteps = try container.decodeIfPresent(Int.self, forKey: .omniVoiceSteps) ?? d.omniVoiceSteps
+        appearanceMode = try container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode) ?? d.appearanceMode
+        textSizeStep = try container.decodeIfPresent(TextSizeStep.self, forKey: .textSizeStep) ?? d.textSizeStep
+        accent = try container.decodeIfPresent(AppAccent.self, forKey: .accent) ?? d.accent
+        glassIntensity = try container.decodeIfPresent(Double.self, forKey: .glassIntensity) ?? d.glassIntensity
+        motionMode = try container.decodeIfPresent(MotionMode.self, forKey: .motionMode) ?? d.motionMode
+        flowBackgroundEnabled = try container.decodeIfPresent(Bool.self, forKey: .flowBackgroundEnabled) ?? d.flowBackgroundEnabled
+        appLanguage = try container.decodeIfPresent(AppLanguage.self, forKey: .appLanguage) ?? d.appLanguage
+        powerModeOnAdapter = try container.decodeIfPresent(PowerMode.self, forKey: .powerModeOnAdapter) ?? d.powerModeOnAdapter
+        powerModeOnBattery = try container.decodeIfPresent(PowerMode.self, forKey: .powerModeOnBattery) ?? d.powerModeOnBattery
+        sidebarGrouping = try container.decodeIfPresent(SidebarGrouping.self, forKey: .sidebarGrouping) ?? d.sidebarGrouping
 
         llmBaseURL = try container.decodeIfPresent(String.self, forKey: .llmBaseURL) ?? d.llmBaseURL
         llmAPIKey = try container.decodeIfPresent(String.self, forKey: .llmAPIKey) ?? d.llmAPIKey
@@ -712,6 +932,9 @@ struct AppSettings: Codable, Sendable, Equatable {
         voicePreviewMaxCharacters = try container.decodeIfPresent(Int.self, forKey: .voicePreviewMaxCharacters) ?? d.voicePreviewMaxCharacters
         outputBaseFolderPath = try container.decodeIfPresent(String.self, forKey: .outputBaseFolderPath) ?? d.outputBaseFolderPath
         outputFolderTemplate = try container.decodeIfPresent(OutputFolderTemplate.self, forKey: .outputFolderTemplate) ?? d.outputFolderTemplate
+        keepChapterAudioAfterPackaging = try container.decodeIfPresent(Bool.self, forKey: .keepChapterAudioAfterPackaging) ?? d.keepChapterAudioAfterPackaging
+        boxLabelHandling = try container.decodeIfPresent(BoxLabelHandling.self, forKey: .boxLabelHandling) ?? d.boxLabelHandling
+        speakHeadingNumbers = try container.decodeIfPresent(Bool.self, forKey: .speakHeadingNumbers) ?? d.speakHeadingNumbers
 
         promptTemplates = try container.decodeIfPresent(PromptTemplates.self, forKey: .promptTemplates) ?? d.promptTemplates
         dependencyPathOverrides = try container.decodeIfPresent(DependencyPathOverrides.self, forKey: .dependencyPathOverrides) ?? d.dependencyPathOverrides
@@ -725,6 +948,8 @@ struct AppSettings: Codable, Sendable, Equatable {
 
         summarizationChunkCharacterBudget = try container.decodeIfPresent(Int.self, forKey: .summarizationChunkCharacterBudget) ?? d.summarizationChunkCharacterBudget
         aiChapterMaxCharacters = try container.decodeIfPresent(Int.self, forKey: .aiChapterMaxCharacters) ?? d.aiChapterMaxCharacters
+        minAIChapterCharacters = try container.decodeIfPresent(Int.self, forKey: .minAIChapterCharacters) ?? d.minAIChapterCharacters
+        aiChapterContinuityEnabled = try container.decodeIfPresent(Bool.self, forKey: .aiChapterContinuityEnabled) ?? d.aiChapterContinuityEnabled
         summarizationBatchTolerance = try container.decodeIfPresent(Double.self, forKey: .summarizationBatchTolerance) ?? d.summarizationBatchTolerance
 
         describeImagesWithVisionModel = try container.decodeIfPresent(Bool.self, forKey: .describeImagesWithVisionModel) ?? d.describeImagesWithVisionModel

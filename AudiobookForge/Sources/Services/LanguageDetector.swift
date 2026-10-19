@@ -43,13 +43,21 @@ enum LanguageDetector {
     }
 
     /// Picks a sensible default engine + voice for a freshly imported book,
-    /// based on the detected language and what's actually usable right now.
+    /// based on the detected language and the language-level default voices
+    /// (plan 8.2): German → `defaultVoiceDE`, English → `defaultVoiceEN`,
+    /// everything else → the globally configured engine/voice.
     static func suggestEngineAndVoice(languageCode: String?, settings: AppSettings) -> (engine: TTSEngineID, voice: String) {
-        guard settings.autoSelectEngineByLanguage, let languageCode, languageCode.hasPrefix("de") else {
+        guard settings.autoSelectEngineByLanguage, let languageCode else {
             return (settings.ttsEngine, settings.defaultVoice(for: settings.ttsEngine))
         }
-        let germanEngine: TTSEngineID = settings.ttsEngine == .kokoroGerman || settings.ttsEngine == .kokoroThorsten || settings.ttsEngine == .supertonic3
-            ? settings.ttsEngine : .piper
-        return (germanEngine, settings.defaultVoice(for: germanEngine))
+        if languageCode.hasPrefix("de") {
+            let voice = settings.defaultVoiceDE
+            return (voice.engine, voice.voice)
+        }
+        if languageCode.hasPrefix("en") {
+            let voice = settings.defaultVoiceEN
+            return (voice.engine, voice.voice)
+        }
+        return (settings.ttsEngine, settings.defaultVoice(for: settings.ttsEngine))
     }
 }

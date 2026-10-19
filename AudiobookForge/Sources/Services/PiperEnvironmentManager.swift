@@ -138,8 +138,15 @@ enum PiperVoiceCatalog {
         PiperVoice(id: "de_DE-thorsten-medium", displayName: "Thorsten (DE, mittel)", languageCode: "de"),
         PiperVoice(id: "de_DE-thorsten-high", displayName: "Thorsten (DE, hoch)", languageCode: "de"),
         PiperVoice(id: "de_DE-thorsten_emotional-medium", displayName: "Thorsten Emotional (DE, mittel)", languageCode: "de"),
+        PiperVoice(id: "de_DE-eva_k-medium", displayName: "Eva K. (DE, mittel)", languageCode: "de"),
+        PiperVoice(id: "de_DE-karlsson-medium", displayName: "Karlsson (DE, mittel)", languageCode: "de"),
         PiperVoice(id: "de_DE-kerstin-low", displayName: "Kerstin (DE, niedrig)", languageCode: "de"),
+        PiperVoice(id: "de_DE-mls-medium", displayName: "MLS (DE, mittel)", languageCode: "de"),
+        PiperVoice(id: "de_DE-pavoque-medium", displayName: "Pavoque (DE, mittel)", languageCode: "de"),
+        PiperVoice(id: "de_DE-ramona-medium", displayName: "Ramona (DE, mittel)", languageCode: "de"),
         PiperVoice(id: "en_US-lessac-medium", displayName: "Lessac (US-Englisch, mittel)", languageCode: "en"),
+        PiperVoice(id: "en_US-ryan-high", displayName: "Ryan (US-Englisch, hoch)", languageCode: "en"),
+        PiperVoice(id: "en_GB-alba-medium", displayName: "Alba (GB-Englisch, mittel)", languageCode: "en"),
     ]
 
     static func voice(id: String) -> PiperVoice? {

@@ -20,4 +20,40 @@ enum AppPaths {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
+
+    /// Cleans up orphaned temporary files from interrupted runs older than the specified age (default: 1 hour).
+    static func cleanupOrphanedTempFiles(olderThan maxAge: TimeInterval = 3600) {
+        let tempDir = FileManager.default.temporaryDirectory
+        let cutoff = Date().addingTimeInterval(-maxAge)
+        guard let files = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        for file in files {
+            let name = file.lastPathComponent
+            if name.hasPrefix("AudiobookForge-chapter-") ||
+               name.hasPrefix("AudiobookForge-pauses-") ||
+               name.hasPrefix("ABF-pause-") ||
+               name.hasPrefix("abf-audio-") {
+                if let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                   modDate < cutoff {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
+    }
+
+    /// Standalone self-contained runtime directory (Python + static FFmpeg)
+    static var runtimeDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("runtime", isDirectory: true)
+    }
+
+    static var runtimePythonURL: URL {
+        runtimeDirectory.appendingPathComponent("python/bin/python3")
+    }
+
+    static var runtimeFFmpegURL: URL {
+        runtimeDirectory.appendingPathComponent("bin/ffmpeg")
+    }
+
+    static var modelsDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("models", isDirectory: true)
+    }
 }

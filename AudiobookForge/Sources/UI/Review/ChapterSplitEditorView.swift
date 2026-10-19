@@ -104,7 +104,8 @@ struct ChapterSplitEditorView: View {
             }
         }
         .onAppear { loadFromBook() }
-        .frame(minWidth: 750, minHeight: 550)
+        .frame(minWidth: 820, minHeight: 600)
+        .background { PaperPage() }
     }
 
     // =========================================================================

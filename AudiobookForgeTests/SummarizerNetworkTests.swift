@@ -14,6 +14,18 @@ final class StubLLMProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        // Connection checks hit GET …/models; answer with a valid models
+        // list so pipeline-level tests can pass the connection gate.
+        if request.httpMethod == "GET", request.url?.path.hasSuffix("models") == true {
+            let payload: [String: Any] = ["data": [["id": "stub-model", "max_model_len": 8192]]]
+            let data = try! JSONSerialization.data(withJSONObject: payload)
+            DispatchQueue.global().async {
+                self.client?.urlProtocol(self, didReceive: HTTPURLResponse(url: self.request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+                self.client?.urlProtocol(self, didLoad: data)
+                self.client?.urlProtocolDidFinishLoading(self)
+            }
+            return
+        }
         var bodyData = request.httpBody
         if bodyData == nil, let stream = request.httpBodyStream {
             stream.open()
@@ -65,6 +77,9 @@ final class SummarizerNetworkTests: XCTestCase {
         settings.omlxBaseURL = "http://stub.llm/v1"
         settings.omlxModel = "stub-model"
         settings.omlxParallelRequests = parallel
+        // These tests exercise networking/retry/ordering — chapter merging
+        // has its own dedicated tests (AIChapterMergerTests).
+        settings.minAIChapterCharacters = 0
         return settings
     }
 
@@ -99,7 +114,8 @@ final class SummarizerNetworkTests: XCTestCase {
             onStructuredProgress: { _ in progressCount.withLock { $0 += 1 } }
         )
         XCTAssertEqual(result.map(\.summarizedText), ["Inhalt 0.", "Inhalt 1.", "Inhalt 2.", "Inhalt 3."])
-        XCTAssertEqual(result.first?.title, "Kapitel 0 — Teil 0")
+        XCTAssertEqual(result.first?.title, "Teil 0")
+        XCTAssertEqual(result.first?.groupTitle, "Kapitel 0")
         XCTAssertEqual(progressCount.withLock { $0 }, 5, "initial + one per call")
     }
 

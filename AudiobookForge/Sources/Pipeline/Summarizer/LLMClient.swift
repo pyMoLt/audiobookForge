@@ -14,9 +14,9 @@ enum LLMThinkingMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .modelDefault: return "Modell-Standard"
-        case .on: return "An"
-        case .off: return "Aus"
+        case .modelDefault: return L("Modell-Standard")
+        case .on: return L("An")
+        case .off: return L("Aus")
         }
     }
 }
@@ -443,5 +443,14 @@ enum OMLXLocalConfig {
         var host = (server["host"] as? String) ?? "127.0.0.1"
         if host == "0.0.0.0" || host.isEmpty { host = "127.0.0.1" }
         return "http://\(host):\(port)/v1"
+    }
+
+    /// API key configured in oMLX's auth settings, nil if empty or missing.
+    static func serverAPIKey(settingsFile: URL = basePath.appendingPathComponent("settings.json")) -> String? {
+        guard let data = FileManager.default.contents(atPath: settingsFile.path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let auth = json["auth"] as? [String: Any],
+              let key = auth["api_key"] as? String, !key.isEmpty else { return nil }
+        return key
     }
 }

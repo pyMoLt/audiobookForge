@@ -6,6 +6,7 @@ import SwiftUI
 /// and where in the book a failure happened.
 struct ChapterTimelineView: View {
     let chapters: [Chapter]
+    @Environment(\.flowAccent) private var accent
 
     private struct TimelineItem: Identifiable {
         let id: UUID
@@ -55,8 +56,8 @@ struct ChapterTimelineView: View {
     private func color(for status: ChapterAudioStatus) -> Color {
         switch status {
         case .pending: return Color.secondary.opacity(0.25)
-        case .summarizing, .synthesizing: return .accentColor
-        case .ready: return .green
+        case .summarizing, .synthesizing: return accent.color.opacity(0.5)
+        case .ready: return accent.color
         case .failed: return .red
         }
     }

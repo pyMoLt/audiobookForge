@@ -85,12 +85,16 @@ struct KokoroEngine: TTSEngine {
         // become an audible pause mid-sentence. Hand it exactly one sentence
         // per line instead: no mid-sentence breaks, one segment per
         // sentence (so read-along text lines up), and a known segment count
-        // for exact progress.
-        let sentences = SentenceSplitter.split(text)
+        // for exact progress. The same plan also drives the app-side pause
+        // engine (plan 8.4): one planned segment = one bridge line, so the
+        // per-segment pauses in --pauses-json line up 1:1.
+        let plannedSegments = PausePlanner.plan(text)
+        let sentences = plannedSegments.map(\.text)
         guard !sentences.isEmpty else {
             throw TTSEngineError.processFailed("Kein Text zum Vorlesen gefunden.")
         }
         onProgress(.plannedSegments(sentences.count))
+        try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let textFileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("AudiobookForge-chapter-\(UUID().uuidString).txt")
         try sentences.joined(separator: "\n").write(to: textFileURL, atomically: true, encoding: .utf8)
@@ -98,12 +102,26 @@ struct KokoroEngine: TTSEngine {
 
         let segmentsJSONURL = outputURL.deletingPathExtension().appendingPathExtension("segments.json")
 
+        // Pause plan (plan 8.4). The output path is the determinism seed:
+        // stable across regenerations of the same chapter, so a
+        // re-synthesized chapter sounds identical.
+        let pausePlan = PausePlanner.pausePlan(for: plannedSegments, determinismKey: outputURL.path, settings: settings)
+        var pausesJSONURL: URL?
+        if PausePlanner.containsSilence(pausePlan) {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("AudiobookForge-pauses-\(UUID().uuidString).json")
+            let encoded = try JSONEncoder().encode(pausePlan)
+            try encoded.write(to: url)
+            pausesJSONURL = url
+        }
+        defer { if let pausesJSONURL { try? FileManager.default.removeItem(at: pausesJSONURL) } }
+
         let process = Process()
         process.executableURL = bridge.pythonExecutableURL
         let scriptURL = Bundle.main.url(forResource: "kokoro_bridge", withExtension: "py", subdirectory: "Bridge")
             ?? Bundle.main.url(forResource: "kokoro_bridge", withExtension: "py")
             ?? bridge.bridgeScriptURL
-        process.arguments = [
+        var arguments = [
             scriptURL.path,
             "--text-file", textFileURL.path,
             "--voice", voiceArgument,
@@ -112,6 +130,10 @@ struct KokoroEngine: TTSEngine {
             "--lang-code", languageCode,
             "--segments-json", segmentsJSONURL.path,
         ]
+        if let pausesJSONURL {
+            arguments += ["--pauses-json", pausesJSONURL.path]
+        }
+        process.arguments = arguments
 
         // PCM flows kernel-side: the bridge streams raw s16le into this
         // pipe and ffmpeg (started as soon as the bridge reports its sample
@@ -203,6 +225,7 @@ struct KokoroEngine: TTSEngine {
             }
 
             do {
+                process.applyPowerProfile()
                 try process.run()
                 if cancelled.withLock({ $0 }) { process.terminate() }
             } catch {
@@ -238,7 +261,7 @@ struct KokoroEngine: TTSEngine {
     /// granularity; if the counts don't line up we just leave `text` nil
     /// rather than guess wrong.
     private func readSegments(from url: URL, fullText: String) -> [TTSSegment]? {
-        struct BridgeSegment: Decodable { let index: Int; let startSeconds: Double; let durationSeconds: Double }
+        struct BridgeSegment: Decodable { let index: Int; let startSeconds: Double; let durationSeconds: Double; let text: String? }
         struct BridgeSegmentsFile: Decodable { let segments: [BridgeSegment] }
 
         guard let data = try? Data(contentsOf: url),
@@ -247,13 +270,17 @@ struct KokoroEngine: TTSEngine {
             return nil
         }
 
-        let sentences = SentenceSplitter.split(fullText)
+        // One bridge line per planned segment (see synthesize) — pair with
+        // the SAME plan, not a separate sentence split (that was off by one
+        // wherever headings or lists differ).
+        let sentences = PausePlanner.plan(fullText).map(\.text)
         let textForIndex: (Int) -> String? = { index in
             sentences.indices.contains(index) && sentences.count == decoded.segments.count ? sentences[index] : nil
         }
 
         return decoded.segments.map { segment in
-            TTSSegment(index: segment.index, startSeconds: segment.startSeconds, durationSeconds: segment.durationSeconds, text: textForIndex(segment.index))
+            TTSSegment(index: segment.index, startSeconds: segment.startSeconds, durationSeconds: segment.durationSeconds,
+                       text: segment.text.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 } ?? textForIndex(segment.index))
         }
     }
 }

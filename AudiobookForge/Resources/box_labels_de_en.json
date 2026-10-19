@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "languages": ["de", "en"],
+  "labels": [
+    { "text": "Merke", "languages": ["de"] },
+    { "text": "Definition", "languages": ["de", "en"] },
+    { "text": "Klinischer Fall", "languages": ["de"] },
+    { "text": "Synonym", "languages": ["de"] },
+    { "text": "Praxistipp", "languages": ["de"] },
+    { "text": "Cave", "languages": ["de"] },
+    { "text": "Fall", "languages": ["de"] },
+    { "text": "Beachte", "languages": ["de"] },
+    { "text": "Exkurs", "languages": ["de"] },
+    { "text": "Zusammenfassung", "languages": ["de"] },
+    { "text": "Key point", "languages": ["en"] },
+    { "text": "Key points", "languages": ["en"] },
+    { "text": "Note", "languages": ["en"] },
+    { "text": "Case", "languages": ["en"] },
+    { "text": "Caution", "languages": ["en"] },
+    { "text": "Clinical pearl", "languages": ["en"] },
+    { "text": "Summary", "languages": ["en"] }
+  ]
+}

@@ -138,7 +138,10 @@ final class ChapterAudioEncoder: @unchecked Sendable {
     func write(_ data: Data) throws {
         try Task.checkCancellation()
         guard !data.isEmpty else { return }
-        stdinPipe.fileHandleForWriting.write(data)
+        // Throwing Swift API: the ObjC `write(_:)` raises an ObjC
+        // exception on a broken pipe (dead ffmpeg child), which nothing
+        // catches and which killed the whole process.
+        try stdinPipe.fileHandleForWriting.write(contentsOf: data)
     }
 
     /// Closes the PCM input and waits for ffmpeg to finalize the file.

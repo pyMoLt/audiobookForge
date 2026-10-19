@@ -12,30 +12,51 @@ struct QueuedView: View {
 
     var body: some View {
         if let book {
-            VStack(spacing: 16) {
-                Spacer()
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.secondary)
-                Text(book.title).font(.title3.weight(.semibold))
-                if let position {
-                    Text("Position \(position) von \(pipelineController.queuedBookIDs.count) in der Warteschlange")
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 26) {
+                // On the pile: the book waits on top of a small stack.
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 2) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.12)).frame(width: 170, height: 16)
+                        RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.08)).frame(width: 182, height: 18)
+                    }
+                    BookCoverView(book: book, width: 150)
+                        .rotationEffect(.degrees(-3))
+                        .offset(y: -36)
                 }
-                if let activeID = pipelineController.activeBookID, let activeBook = libraryStore.book(id: activeID) {
-                    Text("Aktuell in Bearbeitung: \(activeBook.title)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                .padding(.top, 40)
+                VStack(spacing: 8) {
+                    Text("Auf dem Stapel")
+                        .flowFont(.caption, weight: .semibold)
+                        .foregroundStyle(.tint)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
+                    Text(book.title)
+                        .font(.system(size: 26, weight: .semibold, design: .serif))
+                        .multilineTextAlignment(.center)
+                    if let position {
+                        Text("Platz \(position) von \(pipelineController.queuedBookIDs.count) — wird danach automatisch eingesprochen")
+                            .flowFont(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let activeID = pipelineController.activeBookID, let activeBook = libraryStore.book(id: activeID) {
+                        Label("Gerade in der Werkstatt: \(activeBook.title)", systemImage: "hammer")
+                            .flowFont(.callout)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Button("Aus Warteschlange entfernen", role: .destructive) {
+                Button(role: .destructive) {
                     pipelineController.cancelProcessing(bookID: bookID)
+                } label: {
+                    Label("Vom Stapel nehmen", systemImage: "xmark")
                 }
+                .buttonStyle(FlowButtonStyle(variant: .destructive))
                 Spacer()
             }
+            .padding(30)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(book.title)
         } else {
-            ContentUnavailableView("Buch nicht gefunden", systemImage: "questionmark.folder")
+            EmptyStateCard(systemImage: "questionmark.folder", title: "Buch nicht gefunden")
         }
     }
 }

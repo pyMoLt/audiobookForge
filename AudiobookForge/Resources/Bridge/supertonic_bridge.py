@@ -92,6 +92,14 @@ def main() -> int:
     tts = SupertonicMLX.from_pretrained(args.model)
     style = tts.get_voice_style(args.voice)
     protocol("MODEL_LOADED")
+    # MLX keeps freed GPU buffers in a cache that otherwise grows to many GB
+    # over a chapter (measured 2026-10-19: >4 GB after 17 segments, 46 GB swap
+    # with two workers on a full book). Cap it and release after each segment.
+    try:
+        import mlx.core as _mlx
+        _mlx.set_cache_limit(int(os.environ.get("ABF_MLX_CACHE_MB", "256")) * 1024 * 1024)
+    except Exception:  # noqa: BLE001
+        _mlx = None
     protocol(f"SAMPLE_RATE {tts.sample_rate}")
     chunks = bounded_chunks(text, args.chunk_characters)
     protocol(f"SEGMENTS_TOTAL {len(chunks)}")
@@ -106,6 +114,8 @@ def main() -> int:
         segments.append({"index": index, "startSeconds": cumulative, "durationSeconds": seconds, "text": chunk})
         cumulative += seconds
         protocol(f"SEGMENT_DONE {index} {seconds:.3f}")
+        if _mlx is not None:
+            _mlx.clear_cache()
         if index + 1 < len(chunks) and args.pause_seconds > 0:
             silence = np.zeros(int(tts.sample_rate * args.pause_seconds), dtype=np.float32)
             pcm_out.write((silence * 32767.0).astype("<i2").tobytes())

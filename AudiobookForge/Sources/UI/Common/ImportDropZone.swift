@@ -8,42 +8,71 @@ struct ImportDropZone: View {
     @State private var showFileImporter = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(.secondary)
-            Text("PDF oder EPUB hierher ziehen")
-                .font(.title3.weight(.medium))
-            Text("Mehrfachauswahl möglich, auch gemischt PDF + EPUB")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 22) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.pink.opacity(0.85), Color.orange.opacity(0.85)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 76, height: 76)
+                    .shadow(color: Color.orange.opacity(0.3), radius: 12, x: 0, y: 6)
+
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.top, 8)
+
+            VStack(spacing: 6) {
+                Text("PDF oder EPUB hierher ziehen")
+                    .font(.title2.weight(.semibold))
+                Text("Mehrfachauswahl möglich, auch gemischt PDF + EPUB")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
             @Bindable var store = settingsStore
-            Picker("Dokumenttyp", selection: $store.settings.defaultDocumentType) {
-                ForEach(DocumentType.allCases) { type in
-                    Text(type.displayName).tag(type)
+            VStack(spacing: 8) {
+                Picker("Dokumenttyp", selection: $store.settings.defaultDocumentType) {
+                    ForEach(DocumentType.allCases) { type in
+                        Text(type.displayName).tag(type)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 400)
+
+                Text(settingsStore.settings.defaultDocumentType == .paper
+                     ? "Paper: zweispaltige Artikel – Abschnitte wie „2 Related Work“ werden erkannt, Literaturverzeichnis und Ergebnistabellen entfallen."
+                     : "Bei Unsicherheit „Allgemein“ lassen; „Paper“ nur für wissenschaftliche Artikel wählen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 420)
-            Text(settingsStore.settings.defaultDocumentType == .paper
-                 ? "Paper: zweispaltige Artikel – Abschnitte wie „2 Related Work“ werden erkannt, Literaturverzeichnis und Ergebnistabellen entfallen."
-                 : "Bei Unsicherheit „Allgemein“ lassen; „Paper“ nur für wissenschaftliche Artikel wählen.")
-                .font(.caption).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Datei(en) auswählen…") {
+
+            Button {
                 showFileImporter = true
+            } label: {
+                Label("Datei(en) auswählen …", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(FlowButtonStyle(variant: .prominent))
+            .controlSize(.large)
+            .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                .foregroundStyle(isTargeted ? Color.accentColor : Color.secondary.opacity(0.3))
+        .frame(maxWidth: 540)
+        .padding(36)
+        .flowPanel(cornerRadius: Theme.Radius.panel)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                .strokeBorder(isTargeted ? Theme.tint(for: settingsStore.settings.accent) : Color.clear, lineWidth: 2)
+                .animation(.easeInOut(duration: 0.2), value: isTargeted)
         )
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
             return true

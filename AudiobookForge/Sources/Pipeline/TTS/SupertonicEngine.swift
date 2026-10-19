@@ -147,6 +147,7 @@ struct SupertonicEngine: TTSEngine {
             }
 
             do {
+                process.applyPowerProfile()
                 try process.run()
                 if cancelled.withLock({ $0 }) { process.terminate() }
             } catch {

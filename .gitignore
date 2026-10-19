@@ -10,9 +10,18 @@ dist/
 # Große Test-/Hörproben-Dateien (bereits getrackte bleiben historisch)
 docs/hoerproben/*.wav
 docs/hoerproben/*.m4a
+docs/hoerproben/**/*.wav
+docs/hoerproben/**/*.m4a
 docs/e2e/**/*.m4b
 docs/e2e-abbildungen/**/*.m4b
 docs/v3-abnahme/
+PROGRESS*.md
+UEBERGABE.md
+.agent-state*
+AUDIT_REPORT.md
+docs/audit_screenshots_aktuell/
+docs/Ambiente/v32_uebersicht.png
+docs/Ambiente/pixelized/
 
 Derived/
 xcuserdata/

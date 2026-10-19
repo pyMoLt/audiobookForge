@@ -15,26 +15,38 @@ final class PipelineController {
     private(set) var queuedBookIDs: [UUID] = []
     private var tasks: [UUID: Task<Void, Never>] = [:]
     /// Live progress of running books (not persisted). See `RunProgress`.
+    /// Mutations are throttled through `coalescer` (≤ 4 UI updates/s);
+    /// stage switches and completions pass `immediate: true`.
     private(set) var progress: [UUID: RunProgress] = [:]
+    private let coalescer: ProgressCoalescer
 
-    func updateProgress(_ bookID: UUID, _ mutate: (inout RunProgress) -> Void) {
-        guard var current = progress[bookID] else { return }
-        mutate(&current)
-        progress[bookID] = current
+    func updateProgress(_ bookID: UUID, immediate: Bool = false, _ mutate: @escaping (inout RunProgress) -> Void) {
+        coalescer.mutate(bookID: bookID, immediate: immediate, mutate)
     }
 
     private func enterStage(_ bookID: UUID, _ stage: PipelineStage, detail: String = "") {
-        updateProgress(bookID) {
-            $0.stage = stage
-            $0.phaseStartedAt = Date()
-            $0.phaseFraction = 0
-            $0.detail = detail
+        updateProgress(bookID, immediate: true) {
+            $0.enterStage(stage, detail: detail)
         }
     }
 
-    init(libraryStore: LibraryStore, settingsStore: SettingsStore) {
+    /// Test isolation: chapter audio and run logs land in these roots
+    /// (defaults = the user's real Application Support directories).
+    private let chapterAudioRoot: URL
+    private let logsDirectory: URL?
+
+    init(libraryStore: LibraryStore, settingsStore: SettingsStore, chapterAudioRoot: URL = AppPaths.chapterAudioRoot, logsDirectory: URL? = nil) {
         self.libraryStore = libraryStore
         self.settingsStore = settingsStore
+        self.chapterAudioRoot = chapterAudioRoot
+        self.logsDirectory = logsDirectory
+        let coalescer = ProgressCoalescer()
+        self.coalescer = coalescer
+        coalescer.apply = { [weak self] bookID, mutations in
+            guard let self, var current = self.progress[bookID] else { return }
+            for mutation in mutations { mutation(&current) }
+            self.progress[bookID] = current
+        }
     }
 
     func isRunning(_ bookID: UUID) -> Bool {
@@ -64,6 +76,7 @@ final class PipelineController {
     }
 
     private var pausedBookIDs: Set<UUID> = []
+    private var ramWatchdogTriggered: [UUID: String] = [:]
 
     func isPaused(_ bookID: UUID) -> Bool {
         libraryStore.book(id: bookID)?.status == .paused
@@ -112,7 +125,7 @@ final class PipelineController {
     }
 
     private func resetBookAudioState(_ book: inout BookProject) {
-        ChapterAudioStore.removeChapterAudio(bookID: book.id)
+        ChapterAudioStore.removeChapterAudio(bookID: book.id, root: chapterAudioRoot)
         for i in book.chapters.indices {
             book.chapters[i].audioStatus = .pending
             book.chapters[i].audioFileURL = nil
@@ -140,6 +153,7 @@ final class PipelineController {
             await self?.runFullPipeline(bookID: bookID)
             await MainActor.run {
                 guard let self else { return }
+                self.coalescer.drop(bookID: bookID)
                 self.progress[bookID] = nil
                 if self.activeBookID == bookID {
                     self.activeBookID = nil
@@ -173,6 +187,7 @@ final class PipelineController {
             await self?.runSingleChapterRegeneration(bookID: bookID, chapterID: chapterID)
             await MainActor.run {
                 guard let self else { return }
+                self.coalescer.drop(bookID: bookID)
                 self.progress[bookID] = nil
                 if self.activeBookID == bookID {
                     self.activeBookID = nil
@@ -206,19 +221,59 @@ final class PipelineController {
         return book.mode == .summary ? settings.imageDescriptionScope.includesSummaryMode : settings.imageDescriptionScope.includesTranscriptionMode
     }
 
+    /// Whether this chapter should reach narration and the figure pass
+    /// (plan 6.2): excluded by user decision, or auto-suggested as
+    /// skippable (TOC/front matter) without a user override — TOC pages
+    /// used to be "described" as figures, wasting vision calls.
+    private func isIncludedInNarration(_ chapter: Chapter) -> Bool {
+        if chapter.includeInNarration == false { return false }
+        if let kind = chapter.matterKind, FrontBackMatterClassifier.suggestsSkipping(kind), chapter.includeInNarration != true { return false }
+        return true
+    }
+
     /// Text as it is actually consumed (narrated or summarized): figure
     /// descriptions become plain "Abbildung: …" paragraphs at their place,
     /// or vanish when figures are off for this run. Stored chapter text
     /// keeps its markers so a later run (other mode, other setting) can
     /// decide again without re-importing or re-describing.
     private func narrationText(for chapter: Chapter, book: BookProject) -> String {
-        Self.narration(for: chapter, describeFigures: describesFigures(book), removeReferences: settingsStore.settings.removeCrossReferences)
+        Self.narration(
+            for: chapter,
+            describeFigures: describesFigures(book),
+            removeReferences: settingsStore.settings.removeCrossReferences,
+            boxLabelHandling: settingsStore.settings.boxLabelHandling,
+            speakHeadingNumbers: settingsStore.settings.speakHeadingNumbers,
+            languageCode: book.outputLanguageCode
+        )
     }
 
-    nonisolated private static func narration(for chapter: Chapter, describeFigures: Bool, removeReferences: Bool) -> String {
-        if let summary = chapter.summarizedText { return ImageDescriptionMarker.unwrap(summary) }
-        let resolved = describeFigures ? ImageDescriptionMarker.unwrap(chapter.cleanedText) : ImageDescriptionMarker.stripBlocks(from: chapter.cleanedText)
-        return removeReferences ? PDFTextbookCleaner.removeCrossReferences(resolved) : resolved
+    /// The exact text the engine speaks for `chapter` — the read-along page
+    /// uses it so highlighted sentences match the audio 1:1 (v3.1).
+    nonisolated static func spokenText(for chapter: Chapter, book: BookProject, settings: AppSettings) -> String {
+        let describes: Bool = {
+            guard book.describeImages ?? settings.describeImagesWithVisionModel else { return false }
+            return book.mode == .summary ? settings.imageDescriptionScope.includesSummaryMode : settings.imageDescriptionScope.includesTranscriptionMode
+        }()
+        return narration(for: chapter, describeFigures: describes, removeReferences: settings.removeCrossReferences,
+                         boxLabelHandling: settings.boxLabelHandling, speakHeadingNumbers: settings.speakHeadingNumbers,
+                         languageCode: book.outputLanguageCode)
+    }
+
+    nonisolated private static func narration(for chapter: Chapter, describeFigures: Bool, removeReferences: Bool, boxLabelHandling: BoxLabelHandling, speakHeadingNumbers: Bool, languageCode: String) -> String {
+        let base: String
+        if let summary = chapter.summarizedText {
+            base = ImageDescriptionMarker.unwrap(summary)
+        } else {
+            base = describeFigures ? ImageDescriptionMarker.unwrap(chapter.cleanedText) : ImageDescriptionMarker.stripBlocks(from: chapter.cleanedText)
+        }
+        // Box labels and list/heading numbering shape only the spoken
+        // text — the stored chapter text keeps its markers (plan 6.1/6.4).
+        let withoutLabels = BoxLabelFilter.apply(base, handling: boxLabelHandling).text
+        let normalized = ListNumberingFilter.apply(withoutLabels, speakHeadingNumbers: speakHeadingNumbers).text
+        // Pronunciation shaping happens after the text filters and before
+        // the cross-reference pass (plan 6.6); stored text is untouched.
+        let spoken = PronunciationLexicon.apply(normalized, languageCode: languageCode)
+        return removeReferences ? PDFTextbookCleaner.removeCrossReferences(spoken) : spoken
     }
 
     /// "Abbildung: Die Abbildung zeigt …" reads clumsily — drop such
@@ -322,7 +377,8 @@ final class PipelineController {
         guard describesFigures(book) else { return }
         let settings = settingsStore.settings
         let length: FigureDescriptionLength = book.mode == .summary ? .short : .full
-        let texts = book.chapters.map(\.cleanedText) + (book.sourceChapters ?? []).map(\.cleanedText)
+        let texts = book.chapters.filter(isIncludedInNarration).map(\.cleanedText)
+            + (book.sourceChapters ?? []).filter(isIncludedInNarration).map(\.cleanedText)
         let sourceURL = book.sourceURL
         let isPDF = book.sourceType == .pdf
 
@@ -373,7 +429,7 @@ final class PipelineController {
 
         var archiveRoot: URL?
         if book.sourceType == .epub, !pending.isEmpty {
-            archiveRoot = await Task.detached { try? EPUBExtractor.unzip(epubURL: sourceURL) }.value
+            archiveRoot = try? await EPUBExtractor.unzip(epubURL: sourceURL)
             if archiveRoot == nil { logger.log("  EPUB konnte für den Bildpass nicht entpackt werden — Bilder werden übersprungen.") }
         }
         defer { if let archiveRoot { try? FileManager.default.removeItem(at: archiveRoot) } }
@@ -383,7 +439,7 @@ final class PipelineController {
         let bookID = book.id
         let root = archiveRoot
         var results: [String: String?] = [:] // key → description (nil = SKIP)
-        let parallel = max(1, settings.visionParallelRequests)
+        let parallel = PowerProfile.current.llmRequests(configured: settings.visionParallelRequests)
         await withTaskGroup(of: (String, String??).self) { group in
             var next = 0
             var done = 0
@@ -485,13 +541,41 @@ final class PipelineController {
         let result: TTSSynthesisResult
     }
 
-    private func markChapterSynthesizing(bookID: UUID, index: Int, completedCount: Int, chaptersCount: Int) {
-        if var book = libraryStore.book(id: bookID), index < book.chapters.count {
+    /// Forwards a TTS engine event of one parallel worker to that
+    /// chapter's `ChapterProgress`. Called from a background child task,
+    /// so callers hop to the main actor; the update itself is throttled.
+    private func reportSegmentEvent(bookID: UUID, chapterIndex: Int, event: TTSProgressEvent, totalCharacters: Int) {
+        switch event {
+        case .modelLoaded:
+            break
+        case .plannedSegments(let total):
+            updateProgress(bookID) {
+                $0.activeChapters[chapterIndex]?.plannedSegments = total
+            }
+        case .segmentDone(let segIdx, let duration):
+            updateProgress(bookID) {
+                guard var chapter = $0.activeChapters[chapterIndex] else { return }
+                chapter.segmentsDone = segIdx + 1
+                chapter.audioSeconds += duration
+                if let planned = chapter.plannedSegments, planned > 0 {
+                    chapter.fraction = min(1, Double(segIdx + 1) / Double(planned))
+                } else {
+                    chapter.fraction = min(0.999, chapter.fraction + 0.05)
+                }
+                $0.activeChapters[chapterIndex] = chapter
+                if totalCharacters > 0 {
+                    $0.phaseFraction = $0.synthesisTextFraction
+                }
+                $0.noteRateSample(value: $0.producedAudioSeconds, synthesis: true)
+            }
+        }
+    }
+
+    private func markChapterSynthesizing(bookID: UUID, index: Int, completedCount: Int, chaptersCount: Int) {        if var book = libraryStore.book(id: bookID), index < book.chapters.count {
             book.chapters[index].audioStatus = .synthesizing
             libraryStore.upsert(book)
             updateProgress(bookID) {
-                $0.chapterIndex = index
-                $0.chapterTitle = book.chapters[index].title
+                $0.activeChapters[index] = RunProgress.ChapterProgress(index: index, title: book.chapters[index].title)
                 $0.detail = "Kapitel \(completedCount + 1)/\(chaptersCount)"
             }
         }
@@ -516,16 +600,17 @@ final class PipelineController {
 
         let audioFile = ChapterAudioFile(chapter: book.chapters[index], url: result.audioFileURL)
 
-        updateProgress(bookID) { p in
+        updateProgress(bookID, immediate: true) { p in
             p.finishedAudioSeconds += result.durationSeconds
-            p.currentChapterAudioSeconds = 0
-            p.chapterFraction = 1
+            p.activeChapters[index] = nil
+            p.chaptersCompleted = completedCount
             p.synthesisWallSeconds = Date().timeIntervalSince(synthesisStart)
             if totalCharacters > 0 {
                 let readyIndices = Set(book.chapters.enumerated().filter { $0.element.audioStatus == .ready }.map { $0.offset })
                 let finishedChars = readyIndices.reduce(0) { sum, idx in idx < chapterLengths.count ? sum + chapterLengths[idx] : sum }
                 p.phaseFraction = Double(finishedChars) / Double(totalCharacters)
             }
+            p.noteRateSample(value: p.producedAudioSeconds, synthesis: true)
             p.detail = "Kapitel \(completedCount)/\(chaptersCount) fertig"
         }
         return audioFile
@@ -533,7 +618,7 @@ final class PipelineController {
 
     private func runFullPipeline(bookID: UUID) async {
         guard var initialBook = libraryStore.book(id: bookID) else { return }
-        let logger = RunLogger(bookID: bookID, bookTitle: initialBook.title)
+        let logger = RunLogger(bookID: bookID, bookTitle: initialBook.title, directory: logsDirectory)
         defer { logger.close() }
         var settings = settingsStore.settings
 
@@ -661,11 +746,14 @@ final class PipelineController {
                     let budget = settings.effectiveSummarizationBudget(for: book.documentType, override: book.summarizationBudget, contextWindow: contextWindow)
                     let describeForSummary = describesFigures(book)
                     let removeReferencesForSummary = settingsStore.settings.removeCrossReferences
+                    let summaryBoxLabelHandling = settings.boxLabelHandling
+                    let summarySpeakHeadingNumbers = settings.speakHeadingNumbers
+                    let summaryLanguageCode = book.outputLanguageCode
                     let inputs = await Task.detached(priority: .userInitiated) {
                         sourceChapters.map { chapter -> (title: String, text: String) in
                             var plain = chapter
                             plain.summarizedText = nil
-                            return (chapter.title, PipelineController.narration(for: plain, describeFigures: describeForSummary, removeReferences: removeReferencesForSummary))
+                            return (chapter.title, PipelineController.narration(for: plain, describeFigures: describeForSummary, removeReferences: removeReferencesForSummary, boxLabelHandling: summaryBoxLabelHandling, speakHeadingNumbers: summarySpeakHeadingNumbers, languageCode: summaryLanguageCode))
                         }
                     }.value
                     logger.log("Fasse \(sourceChapters.count) Original-Kapitel zusammen (Dokumenttyp: \(book.documentType.displayName), Kontextfenster: \(contextWindow.map { "\($0) Tokens" } ?? "unbekannt"), Ziel-Budget ~\(budget / 1000)k Zeichen pro Aufruf) …")
@@ -694,7 +782,7 @@ final class PipelineController {
 
                     try Task.checkCancellation()
                     book.chapters = aiChapters.enumerated().map { index, result in
-                        Chapter(title: result.title, rawText: result.sourceText, cleanedText: result.sourceText, summarizedText: result.summarizedText, order: index)
+                        Chapter(title: result.title, groupTitle: result.groupTitle, rawText: result.sourceText, cleanedText: result.sourceText, summarizedText: result.summarizedText, order: index)
                     }
                     logger.log("Neue KI-Kapitelstruktur: \(book.chapters.count) Kapitel (aus \(sourceChapters.count) Original-Kapiteln).")
                     libraryStore.upsert(book)
@@ -729,8 +817,11 @@ final class PipelineController {
             let chaptersSnapshot = book.chapters
             let describe = describesFigures(book)
             let removeReferences = settingsStore.settings.removeCrossReferences
+            let synthesisBoxLabelHandling = settingsStore.settings.boxLabelHandling
+            let synthesisSpeakHeadingNumbers = settingsStore.settings.speakHeadingNumbers
+            let synthesisLanguageCode = book.outputLanguageCode
             let narrationTexts = await Task.detached(priority: .userInitiated) {
-                chaptersSnapshot.map { PipelineController.narration(for: $0, describeFigures: describe, removeReferences: removeReferences) }
+                chaptersSnapshot.map { PipelineController.narration(for: $0, describeFigures: describe, removeReferences: removeReferences, boxLabelHandling: synthesisBoxLabelHandling, speakHeadingNumbers: synthesisSpeakHeadingNumbers, languageCode: synthesisLanguageCode) }
             }.value
             try Task.checkCancellation()
             let chapterLengths = narrationTexts.map(\.count)
@@ -743,7 +834,8 @@ final class PipelineController {
 
             for index in book.chapters.indices {
                 let chapter = book.chapters[index]
-                let fileURL = chapter.audioFileURL ?? ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat)
+                guard isIncludedInNarration(chapter) else { continue }
+                let fileURL = chapter.audioFileURL ?? ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat, root: chapterAudioRoot)
                 if chapter.audioStatus == .ready && FileManager.default.fileExists(atPath: fileURL.path) {
                     alreadyDoneIndices.insert(index)
                     let dur = chapter.audioDurationSeconds ?? 0
@@ -754,6 +846,7 @@ final class PipelineController {
 
             updateProgress(bookID) {
                 $0.chapterCount = chapterLengths.count
+                $0.chaptersCompleted = alreadyDoneIndices.count
                 $0.chapterCharacterCounts = chapterLengths
                 $0.charactersPerAudioSecond = 15 * max(book.speechSpeed, 0.1)
                 $0.finishedAudioSeconds = initialFinishedSeconds
@@ -763,11 +856,13 @@ final class PipelineController {
                 }
             }
 
-            let pendingIndices = book.chapters.indices.filter { !alreadyDoneIndices.contains($0) }
+            let pendingIndices = book.chapters.indices.filter { !alreadyDoneIndices.contains($0) && isIncludedInNarration(book.chapters[$0]) }
             if pendingIndices.isEmpty {
                 logger.log("Alle \(book.chapters.count) Kapitel sind bereits synthetisiert. Fahre mit Verpackung fort.")
             } else {
-                let parallelWorkers = max(1, min(settings.ttsParallelWorkers, 4))
+                // Energy profile (v3.2): adapter/battery decides how many
+                // chapters render at once.
+                let parallelWorkers = PowerProfile.current.ttsWorkers(userSetting: settings.ttsParallelWorkers)
                 logger.log("Synthese: \(book.chapters.count) Kapitel insgesamt, \(alreadyDoneIndices.count) bereits fertig, \(pendingIndices.count) zu synthetisieren (\(parallelWorkers) parallele Worker).")
 
                 let pendingItems: [PendingSynthesisItem] = pendingIndices.map { idx in
@@ -777,13 +872,31 @@ final class PipelineController {
                         order: c.order,
                         title: c.title,
                         text: narrationTexts[idx],
-                        outputURL: ChapterAudioStore.chapterFileURL(bookID: bookID, order: c.order, format: book.outputFormat)
+                        outputURL: ChapterAudioStore.chapterFileURL(bookID: bookID, order: c.order, format: book.outputFormat, root: chapterAudioRoot)
                     )
                 }
 
                 let totalChapters = book.chapters.count
                 let voice = book.voice
                 let speed = book.speechSpeed
+
+                try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: chapterAudioRoot)
+
+                var watchdogTask: Task<Void, Never>?
+                if settings.ramWatchdogEnabled {
+                    let limitMB = settings.effectiveRAMLimitMB(for: engine.id, workers: parallelWorkers)
+                    let modeStr = settings.ramWatchdogAuto ? "Auto" : "Manuell"
+                    logger.log("RAM-Watchdog aktiv (\(limitMB / 1024) GB Limit, Modus: \(modeStr)).")
+                    watchdogTask = RAMWatchdog.startMonitoring(limitMB: limitMB) { [weak self] currentMB, maxMB in
+                        guard let self else { return }
+                        let msg = "RAM-Watchdog ausgelöst: Speicherverbrauch (\(Int(currentMB)) MB) hat das Limit von \(maxMB / 1024) GB überschritten. Synthese pausiert."
+                        Task { @MainActor in
+                            self.ramWatchdogTriggered[bookID] = msg
+                            self.pauseProcessing(bookID: bookID)
+                        }
+                    }
+                }
+                defer { watchdogTask?.cancel() }
 
                 try await withThrowingTaskGroup(of: ChapterSynthesisResult.self) { group in
                     var nextIndex = 0
@@ -804,6 +917,9 @@ final class PipelineController {
                                 onProgress: { event in
                                     if case .segmentDone(let segIdx, let duration) = event {
                                         logger.log("  Kapitel \(item.index + 1), Segment \(segIdx + 1) fertig (\(String(format: "%.1f", duration)) s Audio)")
+                                    }
+                                    Task { @MainActor in
+                                        self.reportSegmentEvent(bookID: bookID, chapterIndex: item.index, event: event, totalCharacters: totalCharacters)
                                     }
                                 }
                             )
@@ -844,6 +960,9 @@ final class PipelineController {
                                         if case .segmentDone(let segIdx, let duration) = event {
                                             logger.log("  Kapitel \(nextItem.index + 1), Segment \(segIdx + 1) fertig (\(String(format: "%.1f", duration)) s Audio)")
                                         }
+                                        Task { @MainActor in
+                                            self.reportSegmentEvent(bookID: bookID, chapterIndex: nextItem.index, event: event, totalCharacters: totalCharacters)
+                                        }
                                     }
                                 )
                                 return ChapterSynthesisResult(index: nextItem.index, result: result)
@@ -874,6 +993,35 @@ final class PipelineController {
             )
 
             book.outputDirectoryURL = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+
+            // Post-packaging (plan 5.2): verify the output, then delete the
+            // intermediate chapter audio (unless the user keeps it). The
+            // player then streams from the packaged file.
+            let keepChapterAudio = settingsStore.settings.keepChapterAudioAfterPackaging
+            if book.outputFormat == .mp3Chapters {
+                let directory = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+                let mp3Result = await ChapterAudioCleanup.finalizeMP3Chapters(
+                    book: book,
+                    outputDirectory: directory,
+                    chapterAudioFiles: chapterAudioFiles,
+                    keepChapterAudio: keepChapterAudio,
+                    chapterAudioRoot: chapterAudioRoot
+                )
+                book = mp3Result.book
+                mp3Result.messages.forEach { logger.log("  \($0)") }
+            } else if let ffmpeg = await FFmpegLocator.resolveAsync(settings: settingsStore.settings) {
+                let cleanupResult = await ChapterAudioCleanup.finalizeSingleFile(
+                    book: book,
+                    packagedURL: finalURL,
+                    chapterAudioFiles: chapterAudioFiles,
+                    ffmpeg: ffmpeg,
+                    keepChapterAudio: keepChapterAudio,
+                    chapterAudioRoot: chapterAudioRoot
+                )
+                book = cleanupResult.book
+                cleanupResult.messages.forEach { logger.log("  \($0)") }
+            }
+
             enterStage(bookID, .done)
             book.currentStage = .done
             book.status = .completed
@@ -882,10 +1030,37 @@ final class PipelineController {
             logger.log("=== Fertig. Ausgabe: \(finalURL.path) ===")
         } catch is CancellationError {
             let wasPaused = pausedBookIDs.remove(bookID) != nil
-            logger.log(wasPaused ? "Verarbeitung pausiert." : "Verarbeitung abgebrochen.")
+            let watchdogMessage = ramWatchdogTriggered.removeValue(forKey: bookID)
+            if let watchdogMessage {
+                logger.log("⚠️ \(watchdogMessage)")
+            } else {
+                logger.log(wasPaused ? "Verarbeitung pausiert." : "Verarbeitung abgebrochen.")
+            }
             if var book = libraryStore.book(id: bookID) {
-                book.status = wasPaused ? .paused : .needsReview
-                if !wasPaused {
+                book.status = (wasPaused || watchdogMessage != nil) ? .paused : .needsReview
+                if let watchdogMessage {
+                    book.lastErrorMessage = watchdogMessage
+                } else if !wasPaused {
+                    resetBookAudioState(&book)
+                }
+                libraryStore.upsert(book)
+            }
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // Pausing mid-LLM-call cancels the URLSession request first —
+            // that surfaces as URLError.cancelled, not CancellationError,
+            // and used to mark the book as failed instead of paused.
+            let wasPaused = pausedBookIDs.remove(bookID) != nil
+            let watchdogMessage = ramWatchdogTriggered.removeValue(forKey: bookID)
+            if let watchdogMessage {
+                logger.log("⚠️ \(watchdogMessage)")
+            } else {
+                logger.log(wasPaused ? "Verarbeitung pausiert." : "Verarbeitung abgebrochen.")
+            }
+            if var book = libraryStore.book(id: bookID) {
+                book.status = (wasPaused || watchdogMessage != nil) ? .paused : .needsReview
+                if let watchdogMessage {
+                    book.lastErrorMessage = watchdogMessage
+                } else if !wasPaused {
                     resetBookAudioState(&book)
                 }
                 libraryStore.upsert(book)
@@ -907,11 +1082,33 @@ final class PipelineController {
         guard var book = libraryStore.book(id: bookID),
               let chapterIndex = book.chapters.firstIndex(where: { $0.id == chapterID }) else { return }
 
-        let logger = RunLogger(bookID: bookID, bookTitle: book.title + " (Kapitel-Neugenerierung)")
+        let logger = RunLogger(bookID: bookID, bookTitle: book.title + " (Kapitel-Neugenerierung)", directory: logsDirectory)
         defer { logger.close() }
 
 
         do {
+            // When the intermediate chapter audio was deleted after
+            // packaging (plan 5.2), restore it losslessly from the
+            // verified M4B/M4A in ONE ffmpeg segment pass — otherwise
+            // re-packaging below would have nothing to work with.
+            if book.packagedAudio != nil, book.outputFormat != .mp3Chapters,
+               book.chapters.contains(where: { $0.audioStatus == .ready && $0.audioFileURL == nil }) {
+                guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settingsStore.settings) else {
+                    throw PackagerError.ffmpegNotFound
+                }
+                if let packaged = book.packagedAudio, let packagedURL = PlaybackSourceResolver.resolvePackagedURL(packaged) {
+                    book = try await ChapterAudioStore.restoreChapterAudio(fromPackagedURL: packagedURL, book: book, ffmpeg: ffmpeg, root: chapterAudioRoot)
+                    logger.log("Kapitel-Audio aus der verpackten Datei wiederhergestellt (ein ffmpeg-Durchlauf).")
+                    libraryStore.upsert(book)
+                } else {
+                    logger.log("Fehler: Ausgabe nicht gefunden — Volume verbunden? Kapitel-Audio kann nicht wiederhergestellt werden.")
+                    book.chapters[chapterIndex].audioStatus = .failed
+                    book.chapters[chapterIndex].lastError = "Ausgabe nicht gefunden — Volume verbunden? Ordner im Player neu zuordnen."
+                    libraryStore.upsert(book)
+                    return
+                }
+            }
+
             let engine = TTSEngineFactory.engine(for: book.engineID, settings: settingsStore.settings)
             guard await engine.isReady(voice: book.voice) else {
                 book.chapters[chapterIndex].audioStatus = .failed
@@ -923,8 +1120,21 @@ final class PipelineController {
             book.chapters[chapterIndex].audioStatus = .synthesizing
             libraryStore.upsert(book)
 
+            if progress[bookID] == nil {
+                var regenerationProgress = RunProgress()
+                regenerationProgress.phases = [RunProgress.PhaseInfo(stage: .synthesizing, weight: 1)]
+                regenerationProgress.enterStage(.synthesizing, detail: "Kapitel wird neu erzeugt …")
+                progress[bookID] = regenerationProgress
+            }
+            updateProgress(bookID) {
+                $0.chapterCount = book.chapters.count
+                $0.chaptersCompleted = max(0, book.chapters.filter { $0.audioStatus == .ready }.count - 1)
+                $0.activeChapters[chapterIndex] = RunProgress.ChapterProgress(index: chapterIndex, title: book.chapters[chapterIndex].title)
+            }
+
             let chapter = book.chapters[chapterIndex]
-            let outputURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat)
+            try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: chapterAudioRoot)
+            let outputURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat, root: chapterAudioRoot)
 
             let result = try await engine.synthesize(
                 text: narrationText(for: chapter, book: book),
@@ -935,6 +1145,9 @@ final class PipelineController {
                     if case .segmentDone(let index, let duration) = event {
                         logger.log("Segment \(index) fertig (\(String(format: "%.1f", duration))s)")
                     }
+                    Task { @MainActor in
+                        self.reportSegmentEvent(bookID: bookID, chapterIndex: chapterIndex, event: event, totalCharacters: 0)
+                    }
                 }
             )
 
@@ -943,6 +1156,12 @@ final class PipelineController {
             book.chapters[chapterIndex].audioSegments = result.segments
             book.chapters[chapterIndex].audioStatus = .ready
             libraryStore.upsert(book)
+            updateProgress(bookID, immediate: true) { p in
+                p.activeChapters[chapterIndex] = nil
+                p.chaptersCompleted = max(0, book.chapters.filter { $0.audioStatus == .ready }.count - 1)
+                p.phaseFraction = 1
+                p.detail = "Kapitel neu erzeugt"
+            }
 
             // Re-package so the exported file reflects the updated chapter.
             let readyChapterFiles = book.chapters
@@ -967,9 +1186,43 @@ final class PipelineController {
                 onProgress: { message in logger.log(message) }
             )
             book.outputDirectoryURL = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+
+            // Same post-packaging rules as a full run (plan 5.2): verify,
+            // then delete the (partly restored) chapter audio again when
+            // the user doesn't keep it.
+            let keepChapterAudio = settingsStore.settings.keepChapterAudioAfterPackaging
+            let restoredFiles = book.sortedChapters.compactMap { chapter -> ChapterAudioFile? in
+                guard let url = chapter.audioFileURL else { return nil }
+                return ChapterAudioFile(chapter: chapter, url: url)
+            }
+            if book.outputFormat == .mp3Chapters {
+                let directory = finalURL.hasDirectoryPath ? finalURL : finalURL.deletingLastPathComponent()
+                let mp3Result = await ChapterAudioCleanup.finalizeMP3Chapters(
+                    book: book,
+                    outputDirectory: directory,
+                    chapterAudioFiles: restoredFiles,
+                    keepChapterAudio: keepChapterAudio,
+                    chapterAudioRoot: chapterAudioRoot
+                )
+                book = mp3Result.book
+                mp3Result.messages.forEach { logger.log($0) }
+            } else if let ffmpeg = await FFmpegLocator.resolveAsync(settings: settingsStore.settings) {
+                let cleanupResult = await ChapterAudioCleanup.finalizeSingleFile(
+                    book: book,
+                    packagedURL: finalURL,
+                    chapterAudioFiles: restoredFiles,
+                    ffmpeg: ffmpeg,
+                    keepChapterAudio: keepChapterAudio,
+                    chapterAudioRoot: chapterAudioRoot
+                )
+                book = cleanupResult.book
+                cleanupResult.messages.forEach { logger.log($0) }
+            }
             libraryStore.upsert(book)
         } catch {
             logger.log("Fehler bei Kapitel-Neugenerierung: \(error.localizedDescription)")
+            let outputURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: book.chapters[chapterIndex].order, format: book.outputFormat, root: chapterAudioRoot)
+            try? FileManager.default.removeItem(at: outputURL)
             book.chapters[chapterIndex].audioStatus = .failed
             book.chapters[chapterIndex].lastError = error.localizedDescription
             libraryStore.upsert(book)

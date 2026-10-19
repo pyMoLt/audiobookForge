@@ -13,8 +13,8 @@ enum ProcessingMode: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .transcription: return "Transkription"
-        case .summary: return "Zusammenfassung"
+        case .transcription: return L("Transkription")
+        case .summary: return L("Zusammenfassung")
         }
     }
 }
@@ -28,9 +28,9 @@ enum OutputFormat: String, Codable, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .m4b: return "M4B (Hörbuch, ein File)"
-        case .m4a: return "M4A (ein File, ohne Audiobook-Flag)"
-        case .mp3Chapters: return "MP3-Kapitel-Ordner"
+        case .m4b: return L("M4B (Hörbuch, ein File)")
+        case .m4a: return L("M4A (ein File, ohne Audiobook-Flag)")
+        case .mp3Chapters: return L("MP3-Kapitel-Ordner")
         }
     }
 
@@ -49,19 +49,36 @@ enum TTSEngineID: String, Codable, CaseIterable, Sendable, Identifiable {
     case kokoroGerman
     case kokoroThorsten
     case supertonic3
+    case omniVoice
+    /// macOS system voices (AVSpeechSynthesizer), incl. Premium voices.
+    case appleSystem
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .kokoro: return "Kokoro (lokal, via mlx-audio)"
-        case .piper: return "Piper (lokal, deutsche & weitere Stimmen)"
-        case .kokoroGerman: return "Kokoro Deutsch (MLX: Martin/Victoria)"
-        case .kokoroThorsten: return "Kokoro Thorsten (MLX)"
-        case .supertonic3: return "Supertonic 3 (MLX)"
+        case .kokoro: return L("Kokoro (lokal, via mlx-audio)")
+        case .piper: return L("Piper (lokal, deutsche & weitere Stimmen)")
+        case .kokoroGerman: return L("Kokoro Deutsch (MLX: Martin/Victoria)")
+        case .kokoroThorsten: return L("Kokoro Thorsten (MLX)")
+        case .supertonic3: return L("Supertonic 3 (MLX)")
+        case .omniVoice: return L("OmniVoice (MLX, 600+ Sprachen)")
+        case .appleSystem: return L("macOS-Systemstimmen (schnell, mittlere Qualität)")
         }
     }
+
+    /// Books (and settings) written by a newer app version can contain an
+    /// engine this build doesn't know — decode those as the default engine
+    /// instead of throwing away the whole book record (plan 8.7).
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // "qwen3" was removed (v3.2): its books and clone choices continue
+        // on OmniVoice, the remaining cloning engine.
+        if raw == "qwen3" { self = .omniVoice; return }
+        self = TTSEngineID(rawValue: raw) ?? .kokoro
+    }
 }
+
 
 enum BookProjectStatus: String, Codable, Sendable {
     case needsReview
@@ -83,13 +100,13 @@ enum PipelineStage: String, Codable, Sendable {
 
     var displayName: String {
         switch self {
-        case .extracting: return "Einlesen"
-        case .describingImages: return "Bilder beschreiben"
-        case .summarizing: return "Zusammenfassen"
-        case .synthesizing: return "Vorlesen"
-        case .packaging: return "Verpacken"
-        case .done: return "Fertig"
-        case .failed: return "Fehlgeschlagen"
+        case .extracting: return L("Einlesen")
+        case .describingImages: return L("Bilder beschreiben")
+        case .summarizing: return L("Zusammenfassen")
+        case .synthesizing: return L("Vorlesen")
+        case .packaging: return L("Verpacken")
+        case .done: return L("Fertig")
+        case .failed: return L("Fehlgeschlagen")
         }
     }
 }

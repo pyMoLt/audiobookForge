@@ -22,35 +22,19 @@ enum OMLXLifecycleManager {
     /// Starts the background oMLX server using `omlx start --timeout <seconds>`.
     static func startServer(timeout: TimeInterval = 45) async -> Bool {
         guard let cli = cliURL else { return false }
-        return await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = cli
-            process.arguments = ["start", "--timeout", String(Int(timeout))]
-            do {
-                try process.run()
-                process.waitUntilExit()
-                return process.terminationStatus == 0
-            } catch {
-                return false
-            }
-        }.value
+        guard let result = try? await ProcessRunner.run(executable: cli, arguments: ["start", "--timeout", String(Int(timeout))]) else {
+            return false
+        }
+        return result.terminationStatus == 0
     }
 
     /// Stops the background oMLX server using `omlx stop --timeout <seconds>`,
     /// freeing all unified memory held by loaded models.
     static func stopServer(timeout: TimeInterval = 15) async -> Bool {
         guard let cli = cliURL else { return false }
-        return await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = cli
-            process.arguments = ["stop", "--timeout", String(Int(timeout))]
-            do {
-                try process.run()
-                process.waitUntilExit()
-                return process.terminationStatus == 0
-            } catch {
-                return false
-            }
-        }.value
+        guard let result = try? await ProcessRunner.run(executable: cli, arguments: ["stop", "--timeout", String(Int(timeout))]) else {
+            return false
+        }
+        return result.terminationStatus == 0
     }
 }

@@ -14,72 +14,95 @@ struct LLMSettingsTabView: View {
     }
 
     var body: some View {
-        @Bindable var settingsStore = settingsStore
-        Form {
-            Section("Inferenz-Backend") {
-                Picker("Backend", selection: $settingsStore.settings.llmProvider) {
-                    ForEach(LLMProviderID.allCases) { provider in
-                        Text(provider.displayName).tag(provider)
-                    }
+        @Bindable var store = settingsStore
+        VStack(alignment: .leading, spacing: 30) {
+            PillSection("Sprachmodell", footer: "Für Zusammenfassungen und Bildbeschreibungen. Ist der Server nicht erreichbar, bietet die App den Transkriptions-Modus an.") {
+                PillRow(title: "Backend") {
+                    SegmentedPills(selection: $store.settings.llmProvider,
+                                   options: LLMProviderID.allCases.map { PillOption(value: $0, label: $0.displayName) })
                 }
-                TextField("Basis-URL", text: activeBaseURLBinding)
-                    .textFieldStyle(.roundedBorder)
-                HStack {
-                    TextField("Port", text: portBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 140)
-                    Button("Standard (\(settingsStore.settings.llmProvider.defaultBaseURL))") {
-                        activeBaseURLBinding.wrappedValue = settingsStore.settings.llmProvider.defaultBaseURL
-                        testConnection()
-                    }
-                    Button("Verbinden") { testConnection() }
-                }
-                SecureField("API-Key (optional)", text: activeAPIKeyBinding)
-                    .textFieldStyle(.roundedBorder)
-                if !availableModels.isEmpty {
-                    Picker("Modell", selection: activeModelBinding) {
-                        if !availableModels.contains(settingsStore.settings.activeLLMModel) && !settingsStore.settings.activeLLMModel.isEmpty {
-                            Text(settingsStore.settings.activeLLMModel).tag(settingsStore.settings.activeLLMModel)
+                PillRow(title: "Server", subtitle: String(localized: "Basis-URL — Standard: \(settingsStore.settings.llmProvider.defaultBaseURL)")) {
+                    HStack(spacing: 8) {
+                        TextField("http://localhost:8000/v1", text: activeBaseURLBinding)
+                            .textFieldStyle(.flow)
+                            .frame(width: 240)
+                        Button("Standard") {
+                            activeBaseURLBinding.wrappedValue = settingsStore.settings.llmProvider.defaultBaseURL
+                            testConnection()
                         }
-                        ForEach(availableModels, id: \.self) { model in Text(model).tag(model) }
+                        .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                     }
                 }
-                TextField("Modell-ID", text: activeModelBinding)
-                    .textFieldStyle(.roundedBorder)
-                Text("Modelle werden über /models geladen. Die ID kann auch manuell eingetragen werden.")
-                    .font(.caption).foregroundStyle(.secondary)
+                PillRow(title: "API-Key", subtitle: "Optional") {
+                    SecureField("—", text: activeAPIKeyBinding)
+                        .textFieldStyle(.flow)
+                        .frame(width: 240)
+                }
+                PillRow(title: "Modell", subtitle: selectedModelInfo?.contextWindow.map { "Kontextfenster: \($0) Tokens" } ?? "Über „Verbinden“ geladen oder manuell eingetragen") {
+                    HStack(spacing: 8) {
+                        if !availableModels.isEmpty {
+                            PillPicker(selection: activeModelBinding, options: modelOptions, minWidth: 200)
+                        } else {
+                            TextField("Modell-ID", text: activeModelBinding)
+                                .textFieldStyle(.flow)
+                                .frame(width: 240)
+                        }
+                    }
+                }
+                HStack(spacing: 12) {
+                    Button {
+                        testConnection()
+                    } label: {
+                        if isTesting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Verbinden & Modelle laden", systemImage: "bolt.horizontal.circle")
+                        }
+                    }
+                    .buttonStyle(.flowProminent)
+                    .disabled(isTesting)
+                    if let testResult {
+                        switch testResult {
+                        case .success(let message):
+                            StatusBadge(text: message, systemImage: "checkmark.circle.fill", tint: .green)
+                        case .failure(let message):
+                            StatusBadge(text: message, systemImage: "xmark.circle.fill", tint: .red)
+                        }
+                    }
+                }
+                .padding(.horizontal, 6)
             }
 
-            Section("Thinking (Reasoning)") {
-                Picker("Thinking", selection: generationBinding(\.thinkingMode)) {
-                    ForEach(LLMThinkingMode.allCases) { Text($0.displayName).tag($0) }
+            PillSection("Thinking", footer: thinkingExplanation) {
+                PillRow(title: "Thinking (Reasoning)") {
+                    SegmentedPills(selection: generationBinding(\.thinkingMode),
+                                   options: LLMThinkingMode.allCases.map { PillOption(value: $0, label: $0.displayName) }, size: .small)
                 }
-                .pickerStyle(.segmented)
                 if settingsStore.settings.activeGenerationOptions.thinkingMode != .off {
-                    Stepper(value: generationBinding(\.thinkingBudgetTokens), in: 0...65536, step: 1024) {
-                        Text("Thinking-Budget: \(settingsStore.settings.activeGenerationOptions.thinkingBudgetTokens == 0 ? "unbegrenzt" : "\(max(settingsStore.settings.activeGenerationOptions.thinkingBudgetTokens, LLMGenerationOptions.minimumThinkingBudget)) Tokens")")
+                    PillRow(title: "Thinking-Budget", subtitle: "0 = unbegrenzt") {
+                        PillStepper(value: generationBinding(\.thinkingBudgetTokens), range: 0...65536, step: 1024, suffix: "Tokens")
                     }
-                    Picker("Reasoning-Tiefe", selection: generationBinding(\.reasoningEffort)) {
-                        Text("Nicht senden").tag("")
-                        Text("low").tag("low")
-                        Text("medium").tag("medium")
-                        Text("high").tag("high")
+                    PillRow(title: "Reasoning-Tiefe") {
+                        SegmentedPills(selection: generationBinding(\.reasoningEffort), options: [
+                            PillOption(value: "", label: "Nicht senden"),
+                            PillOption(value: "low", label: "low"),
+                            PillOption(value: "medium", label: "medium"),
+                            PillOption(value: "high", label: "high"),
+                        ], size: .small)
                     }
                 }
-                Text(thinkingExplanation)
-                    .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section {
-                if let info = selectedModelInfo {
-                    LabeledContent("Kontextfenster (Server)", value: info.contextWindow.map { "\($0) Tokens" } ?? "unbekannt")
-                }
+            PillSection("Sampling", footer: "Nicht überschriebene Werte werden nicht gesendet — der Server nutzt sein Modell-Preset. Für faktentreue Zusammenfassungen: Temperatur 0.3–0.5, Presence Penalty 0.") {
                 ForEach(serverPreset?.warnings ?? [], id: \.self) { warning in
-                    Label("oMLX-Preset: \(warning)", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).font(.caption)
+                    Label(String(localized: "oMLX-Preset: \(warning)"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).flowFont(.caption)
+                        .padding(.horizontal, 6)
                 }
                 if settingsStore.settings.llmProvider == .omlx {
-                    Toggle("Offensichtlich falsche Server-Presets korrigieren (z. B. Top P 95 → 0.95)", isOn: $settingsStore.settings.correctImplausibleServerPresets)
+                    PillRow(title: "Offensichtlich falsche Server-Presets korrigieren (z. B. Top P 95 → 0.95)") {
+                        PillToggle(isOn: $store.settings.correctImplausibleServerPresets)
+                    }
                 }
                 OptionalDoubleRow(title: "Temperatur", value: generationBinding(\.temperature), serverValue: serverPreset?.temperature, range: 0...2, step: 0.05)
                 OptionalDoubleRow(title: "Top P", value: generationBinding(\.topP), serverValue: serverPreset?.topP, range: 0.05...1, step: 0.01)
@@ -88,70 +111,43 @@ struct LLMSettingsTabView: View {
                 OptionalDoubleRow(title: "Presence Penalty", value: generationBinding(\.presencePenalty), serverValue: serverPreset?.presencePenalty, range: 0...2, step: 0.1)
                 OptionalDoubleRow(title: "Repetition Penalty", value: generationBinding(\.repetitionPenalty), serverValue: serverPreset?.repetitionPenalty, range: 1...2, step: 0.01)
                 OptionalIntRow(title: "Seed", value: generationBinding(\.seed), serverValue: nil, range: 1...999_999, step: 1)
-                OptionalIntRow(title: "Max. Ausgabetokens", value: generationBinding(\.maxOutputTokens), serverValue: nil, range: 512...131_072, step: 512, defaultLabel: "Automatisch (aus Eingabelänge)")
+                OptionalIntRow(title: "Max. Ausgabetokens", value: generationBinding(\.maxOutputTokens), serverValue: nil, range: 512...131_072, step: 512, defaultLabel: "Automatisch")
                 HStack {
-                    Button("Modell-Preset als Overrides übernehmen") { adoptServerPreset() }
+                    Button("Preset als Overrides übernehmen") { adoptServerPreset() }
+                        .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
                         .disabled(serverPreset == nil)
                     Button("Alle auf Modell-Standard") { resetToModelDefaults() }
+                        .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                 }
-            } header: {
-                Text("Sampling")
-            } footer: {
-                Text("Nicht überschriebene Werte werden nicht gesendet: Der Server wendet dann sein Preset für das geladene Modell an (oMLX: Modell-Einstellungen). So bleiben Modelle frei austauschbar. Für faktentreue Zusammenfassungen sind Temperatur 0.3–0.5 und Presence Penalty 0 empfehlenswert.")
-                    .font(.caption).foregroundStyle(.secondary)
+                .padding(.top, 4)
             }
 
-            Section("Durchsatz & Grenzen") {
-                Stepper("Parallele Anfragen: \(parallelRequestsBinding.wrappedValue)", value: parallelRequestsBinding, in: 1...8)
-                Stepper("Kontextlimit: \(settingsStore.settings.llmContextLimitTokens == 0 ? "Automatisch (Server)" : String(settingsStore.settings.llmContextLimitTokens))", value: $settingsStore.settings.llmContextLimitTokens, in: 0...262_144, step: 4096)
-                Stepper("Antwort-Timeout: \(Int(settingsStore.settings.llmRequestTimeoutSeconds)) s", value: $settingsStore.settings.llmRequestTimeoutSeconds, in: 30...3600, step: 30)
-                Stepper("Verbindungs-Timeout: \(Int(settingsStore.settings.llmConnectionTimeoutSeconds)) s", value: $settingsStore.settings.llmConnectionTimeoutSeconds, in: 1...60, step: 1)
-                Text("oMLX verarbeitet parallele Anfragen gemeinsam (Continuous Batching) — 2 beschleunigt Bücher mit vielen Kapiteln deutlich. LM Studio arbeitet Anfragen nacheinander ab. Das Kontextlimit begrenzt die Zeichenmenge pro Aufruf; automatisch wird das vom Server gemeldete Kontextfenster genutzt.")
-                    .font(.caption).foregroundStyle(.secondary)
+            PillSection("Durchsatz & Grenzen", footer: "oMLX verarbeitet parallele Anfragen gemeinsam (Continuous Batching); LM Studio nacheinander. Kontextlimit 0 = vom Server gemeldetes Fenster.") {
+                PillRow(title: "Parallele Anfragen") {
+                    PillStepper(value: parallelRequestsBinding, range: 1...8)
+                }
+                PillRow(title: "Kontextlimit", subtitle: "0 = automatisch") {
+                    PillStepper(value: $store.settings.llmContextLimitTokens, range: 0...262_144, step: 4096, suffix: "Tokens")
+                }
+                PillRow(title: "Antwort-Timeout") {
+                    PillSlider(value: $store.settings.llmRequestTimeoutSeconds, range: 30...3600, step: 30, format: "%.0f s")
+                }
+                PillRow(title: "Verbindungs-Timeout") {
+                    PillSlider(value: $store.settings.llmConnectionTimeoutSeconds, range: 1...60, step: 1, format: "%.0f s")
+                }
             }
 
             if settingsStore.settings.llmProvider == .omlx {
-                Section("oMLX Server-Verwaltung") {
-                    Toggle("oMLX bei Bedarf automatisch starten", isOn: $settingsStore.settings.autoStartOMLX)
-                    Text("Startet den oMLX-Hintergrunddienst automatisch über `omlx start`, falls er vor einem Bild- oder Zusammenfassungsdurchlauf nicht erreichbar ist.")
-                        .font(.caption).foregroundStyle(.secondary)
-
-                    Toggle("oMLX nach LLM-Phasen automatisch beenden (RAM freigeben)", isOn: $settingsStore.settings.autoUnloadOMLXAfterPass)
-                    Text("Beendet den oMLX-Server (`omlx stop`) nach Abschluss der Bild- und Textzusammenfassungen, bevor die Sprachsynthese (TTS) startet. Gibt rund 20+ GB Unified Memory für Kokoro und macOS frei.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                HStack {
-                    Button {
-                        testConnection()
-                    } label: {
-                        if isTesting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Modelle laden / Verbindung testen")
-                        }
+                PillSection("oMLX-Server") {
+                    PillRow(title: "Bei Bedarf automatisch starten", subtitle: "`omlx start`, falls der Server vor einem KI-Durchlauf nicht läuft.") {
+                        PillToggle(isOn: $store.settings.autoStartOMLX)
                     }
-                    .disabled(isTesting)
-
-                    if let testResult {
-                        switch testResult {
-                        case .success(let message):
-                            Label(message, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        case .failure(let message):
-                            Label(message, systemImage: "xmark.circle.fill").foregroundStyle(.red)
-                        }
+                    PillRow(title: "Nach KI-Phasen beenden", subtitle: "Gibt vor dem Einsprechen ~20 GB Speicher frei (`omlx stop`).") {
+                        PillToggle(isOn: $store.settings.autoUnloadOMLXAfterPass)
                     }
                 }
-                Text("Wird für Zusammenfassungen und bei aktiviertem Bildpass für Bildbeschreibungen verwendet. Ist der Endpoint nicht erreichbar, bietet die App beim Verarbeiten den Transkriptions-Modus an.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
         }
-        .formStyle(.grouped)
-        .onAppear { testConnection() }
         .onChange(of: settingsStore.settings.llmProvider) { _, _ in
             availableModels = []
             modelInfos = []
@@ -160,14 +156,21 @@ struct LLMSettingsTabView: View {
         .onChange(of: settingsStore.settings.activeLLMModel) { _, _ in refreshPreset() }
     }
 
+    private var modelOptions: [PillOption<String>] {
+        var ids = availableModels
+        let current = settingsStore.settings.activeLLMModel
+        if !current.isEmpty && !ids.contains(current) { ids.insert(current, at: 0) }
+        return ids.map { PillOption(value: $0, label: $0) }
+    }
+
     private var selectedModelInfo: LLMModelInfo? {
         modelInfos.first { $0.id == settingsStore.settings.activeLLMModel }
     }
 
     private var thinkingExplanation: String {
-        var text = "Wird über das Chat-Template des Modells gesteuert (enable_thinking) und funktioniert damit für jedes Modell, dessen Template es unterstützt. Für Zusammenfassungen ist „Aus“ meist die beste Wahl: deutlich schneller, kaum Qualitätsverlust beim Verdichten. Ein zu kleines Budget lässt Denktext in die Antwort überlaufen — deshalb mindestens \(LLMGenerationOptions.minimumThinkingBudget) Tokens."
+        var text = String(localized: "Wird über das Chat-Template des Modells gesteuert (enable_thinking) und funktioniert damit für jedes Modell, dessen Template es unterstützt. Für Zusammenfassungen ist „Aus“ meist die beste Wahl: deutlich schneller, kaum Qualitätsverlust beim Verdichten. Ein zu kleines Budget lässt Denktext in die Antwort überlaufen — deshalb mindestens \(LLMGenerationOptions.minimumThinkingBudget) Tokens.")
         if settingsStore.settings.llmProvider == .lmStudio {
-            text += " LM Studio: Das Abschalten wirkt nur, wenn das Modell-Template es zulässt (beim gespeicherten Qwen3.6-Template ist Thinking fest an); ein Thinking-Budget unterstützt LM Studio nicht."
+            text += L(" LM Studio: Das Abschalten wirkt nur, wenn das Modell-Template es zulässt (beim gespeicherten Qwen3.6-Template ist Thinking fest an); ein Thinking-Budget unterstützt LM Studio nicht.")
         }
         return text
     }
@@ -289,25 +292,21 @@ private struct OptionalDoubleRow: View {
     let range: ClosedRange<Double>
     let step: Double
 
+    /// Off = not sent, the server's model preset applies.
+    private var isOverridden: Binding<Bool> {
+        Binding(
+            get: { value != nil },
+            set: { value = $0 ? min(max(serverValue ?? range.lowerBound, range.lowerBound), range.upperBound) : nil }
+        )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(isOn: Binding(
-                get: { value != nil },
-                set: { value = $0 ? min(max(serverValue ?? range.lowerBound, range.lowerBound), range.upperBound) : nil }
-            )) {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    if let value {
-                        Text(String(format: "%.2f", value)).monospacedDigit()
-                    } else {
-                        Text("Modell-Standard\(serverValue.map { String(format: " (%.2f)", $0) } ?? "")")
-                            .foregroundStyle(.secondary)
-                    }
+        PillRow(title: title, subtitle: value == nil ? L("Modell-Standard") + (serverValue.map { String(format: " (%.2f)", $0) } ?? "") : nil) {
+            HStack(spacing: 14) {
+                if let current = value {
+                    PillSlider(value: Binding(get: { current }, set: { value = ($0 / step).rounded() * step }), range: range, step: step)
                 }
-            }
-            if let current = value {
-                Slider(value: Binding(get: { current }, set: { value = ($0 / step).rounded() * step }), in: range)
+                PillToggle(isOn: isOverridden)
             }
         }
     }
@@ -321,23 +320,20 @@ private struct OptionalIntRow: View {
     let step: Int
     var defaultLabel: String = "Modell-Standard"
 
-    var body: some View {
-        Toggle(isOn: Binding(
+    private var isOverridden: Binding<Bool> {
+        Binding(
             get: { value != nil },
             set: { value = $0 ? min(max(serverValue ?? range.lowerBound, range.lowerBound), range.upperBound) : nil }
-        )) {
-            HStack {
-                Text(title)
-                Spacer()
+        )
+    }
+
+    var body: some View {
+        PillRow(title: title, subtitle: value == nil ? L(defaultLabel) + (serverValue.map { " (\($0))" } ?? "") : nil) {
+            HStack(spacing: 14) {
                 if let current = value {
-                    Stepper(value: Binding(get: { current }, set: { value = $0 }), in: range, step: step) {
-                        Text("\(current)").monospacedDigit()
-                    }
-                    .fixedSize()
-                } else {
-                    Text("\(defaultLabel)\(serverValue.map { " (\($0))" } ?? "")")
-                        .foregroundStyle(.secondary)
+                    PillStepper(value: Binding(get: { current }, set: { value = $0 }), range: range, step: step)
                 }
+                PillToggle(isOn: isOverridden)
             }
         }
     }

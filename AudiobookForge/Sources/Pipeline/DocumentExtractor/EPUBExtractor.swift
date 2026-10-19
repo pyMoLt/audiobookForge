@@ -14,13 +14,11 @@ struct EPUBExtractor: DocumentExtractor {
     }
 
     func extract(from url: URL) async throws -> ExtractedDocument {
-        try await Task.detached(priority: .userInitiated) {
-            try extractSync(url: url)
-        }.value
+        try await extractEPUBContents(url: url)
     }
 
-    private func extractSync(url: URL) throws -> ExtractedDocument {
-        let workDir = try unzip(epubURL: url)
+    private func extractEPUBContents(url: URL) async throws -> ExtractedDocument {
+        let workDir = try await unzip(epubURL: url)
         defer { try? FileManager.default.removeItem(at: workDir) }
 
         let containerURL = workDir.appendingPathComponent("META-INF/container.xml")
@@ -89,31 +87,28 @@ struct EPUBExtractor: DocumentExtractor {
 
     // MARK: - Unzip
 
-    private func unzip(epubURL: URL) throws -> URL {
-        try Self.unzip(epubURL: epubURL)
+    private func unzip(epubURL: URL) async throws -> URL {
+        try await Self.unzip(epubURL: epubURL)
     }
 
     /// Unpacks an EPUB into a fresh temporary directory (caller deletes).
     /// Also used at processing time to read figure images.
-    static func unzip(epubURL: URL) throws -> URL {
+    static func unzip(epubURL: URL) async throws -> URL {
         let workDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("AudiobookForge-EPUB-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-qq", "-o", epubURL.path, "-d", workDir.path]
-        let errorPipe = Pipe()
-        process.standardError = errorPipe
-        process.standardOutput = Pipe()
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: errorData, encoding: .utf8) ?? "unzip fehlgeschlagen"
-            throw DocumentExtractionError.unreadableDocument(message)
+        let result: ProcessResult
+        do {
+            result = try await ProcessRunner.run(
+                executable: URL(fileURLWithPath: "/usr/bin/unzip"),
+                arguments: ["-qq", "-o", epubURL.path, "-d", workDir.path]
+            )
+        } catch {
+            throw DocumentExtractionError.unreadableDocument("unzip konnte nicht gestartet werden: \(error.localizedDescription)")
+        }
+        guard result.terminationStatus == 0 else {
+            throw DocumentExtractionError.unreadableDocument(result.standardErrorText.isEmpty ? "unzip fehlgeschlagen" : result.standardErrorText)
         }
 
         return workDir

@@ -8,7 +8,10 @@ struct ReviewView: View {
     let bookID: UUID
 
     @State private var showSplitEditor = false
+    @State private var showVoiceGallery = false
     @State private var splitEditorTargetChapterID: UUID? = nil
+    @State private var preparationReport: PreparationReport?
+    @State private var detectedImagesCountCached: Int?
 
     private var book: BookProject {
         libraryStore.book(id: bookID) ?? BookProject(title: "", author: "", sourceType: .pdf, sourceURL: URL(fileURLWithPath: "/"), chapters: [], outputFormat: .mp3Chapters, voice: "af_heart", speechSpeed: 1.0)
@@ -16,18 +19,43 @@ struct ReviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 30) {
+                manuscriptHeader
                 if let error = book.lastErrorMessage {
                     errorBanner(error)
                 }
-
-                metadataSection
-                modeSection
+                readingSection
                 granularitySection
+                if detectedImagesCount > 0 { imagesSection }
                 outputSection
+                preparationSection
                 chapterSection
             }
-            .padding(24)
+            .padding(.horizontal, 36)
+            .padding(.vertical, 26)
+            .frame(maxWidth: 980, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollEdgeEffectHidden(true, for: .top)
+        .scrollIndicators(.never)
+        .task(id: book.chapters.count) {
+            let chapters = book.chapters
+            let settings = settingsStore.settings
+            let report = await Task.detached(priority: .utility) {
+                PreparationReport.build(chapters: chapters, settings: settings)
+            }.value
+            self.preparationReport = report
+        }
+        .task(id: book.id) {
+            if book.detectedImageCount == nil {
+                let chapters = book.chapters + (book.sourceChapters ?? [])
+                let count = await Task.detached(priority: .utility) {
+                    chapters.reduce(into: Set<String>()) { keys, chapter in
+                        ImageDescriptionMarker.figures(in: chapter.cleanedText).forEach { keys.insert($0.ref.key) }
+                    }.count
+                }.value
+                self.detectedImagesCountCached = count
+            }
         }
         .navigationTitle(book.title.isEmpty ? "Neues Buch" : book.title)
         .toolbar {
@@ -35,25 +63,77 @@ struct ReviewView: View {
                 Button {
                     pipelineController.enqueue(bookID: bookID)
                 } label: {
-                    Label(pipelineController.isAnyBookActive ? "Zur Warteschlange hinzufügen" : "Verarbeitung starten", systemImage: pipelineController.isAnyBookActive ? "text.badge.plus" : "play.fill")
+                    Label(startLabel, systemImage: pipelineController.isAnyBookActive ? "text.badge.plus" : "waveform.badge.plus")
                 }
                 .disabled(book.chapters.isEmpty)
             }
         }
     }
 
-    private func errorBanner(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            if book.mode == .summary {
-                Button("Stattdessen im Transkriptions-Modus fortfahren") {
-                    pipelineController.fallBackToTranscription(bookID: bookID)
+    private var startLabel: String {
+        L(pipelineController.isAnyBookActive ? "Zur Warteschlange" : "Hörbuch erstellen")
+    }
+
+    /// The manuscript on the desk: cover, editable title/author, facts and
+    /// the one big action.
+    private var manuscriptHeader: some View {
+        HStack(alignment: .top, spacing: 24) {
+            BookCoverView(book: book, width: 132)
+                .rotation3DEffect(.degrees(-8), axis: (x: 0, y: 1, z: 0), anchor: .leading, perspective: 0.6)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Manuskript · bereit zur Prüfung")
+                    .flowFont(.caption, weight: .semibold)
+                    .foregroundStyle(.tint)
+                    .textCase(.uppercase)
+                    .tracking(1.1)
+                TextField("Titel", text: bindingForTitle(), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .lineLimit(1...3)
+                TextField("Autor (optional)", text: bindingForAuthor())
+                    .textFieldStyle(.plain)
+                    .flowFont(.title3, weight: .regular)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    StatusBadge(text: String(localized: "\(book.chapters.count) Kapitel"), systemImage: "list.bullet", tint: .secondary)
+                    StatusBadge(text: "≈ " + formatDuration(minutes: estimatedTotalMinutes), systemImage: "clock", tint: .secondary)
+                    StatusBadge(text: LanguageDetector.displayName(book.languageCode), systemImage: "globe", tint: .secondary)
+                    StatusBadge(text: book.sourceType == .pdf ? "PDF" : "EPUB", systemImage: "doc", tint: .secondary)
                 }
+                .padding(.top, 2)
+                HStack(spacing: 10) {
+                    Button {
+                        pipelineController.enqueue(bookID: bookID)
+                    } label: {
+                        Label(startLabel, systemImage: "waveform.badge.plus")
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .prominent, size: .large))
+                    .disabled(book.chapters.isEmpty)
+                    previewButton
+                }
+                .padding(.top, 8)
             }
         }
-        .padding(12)
-        .glassPanel()
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(message).flowFont(.body)
+                if book.mode == .summary {
+                    Button("Stattdessen im Transkriptions-Modus fortfahren") {
+                        pipelineController.fallBackToTranscription(bookID: bookID)
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.row, style: .continuous))
     }
 
     private var describeImagesValue: Bool {
@@ -75,130 +155,140 @@ struct ReviewView: View {
         if let count = book.detectedImageCount, count > 0 {
             return count
         }
-        return (book.chapters + (book.sourceChapters ?? [])).reduce(into: Set<String>()) { keys, chapter in
-            ImageDescriptionMarker.figures(in: chapter.cleanedText).forEach { keys.insert($0.ref.key) }
-        }.count
+        if let cached = detectedImagesCountCached {
+            return cached
+        }
+        return 0
     }
 
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Metadaten").font(.headline)
-            LabeledContent("Titel") {
-                TextField("Titel", text: bindingForTitle())
-                    .textFieldStyle(.roundedBorder)
-            }
-            LabeledContent("Autor") {
-                TextField("Autor (optional)", text: bindingForAuthor())
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Divider()
-            let imgCount = detectedImagesCount
-            HStack(spacing: 8) {
-                Image(systemName: imgCount > 0 ? "photo.badge.checkmark" : "photo")
-                    .foregroundStyle(imgCount > 0 ? .purple : .secondary)
-                if imgCount > 0 {
-                    Text("\(imgCount) Abbildung\(imgCount == 1 ? "" : "en") erkannt")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.purple)
-                    Spacer()
-                    Picker("Abbildungen", selection: bindingForDescribeImages()) {
-                        Text("Beschreiben").tag(true)
-                        Text("Verwerfen").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                } else {
-                    Text("Keine Abbildungen erkannt (oder alle unter den Größenfiltern)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if imgCount > 0 {
-                Text(describeImagesValue
-                     ? "Das Vision-Modell beschreibt jede Abbildung; die Beschreibung wird als „Abbildung: …“ genau an ihrer Stelle vorgelesen (im KI-Modus als kurze Zusatzinfo für die Zusammenfassung)."
-                     : "Abbildungen werden übersprungen — nur der Text wird vorgelesen.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var imagesSection: some View {
+        PillSection("Abbildungen", footer: describeImagesValue
+                    ? "Das Vision-Modell beschreibt jede Abbildung; die Beschreibung wird als „Abbildung: …“ genau an ihrer Stelle vorgelesen."
+                    : "Abbildungen werden übersprungen — nur der Text wird vorgelesen.") {
+            PillRow(title: "\(detectedImagesCount) Abbildung\(detectedImagesCount == 1 ? "" : "en") erkannt", systemImage: "photo.on.rectangle") {
+                SegmentedPills(selection: bindingForDescribeImages(), options: [
+                    PillOption(value: true, label: "Beschreiben"),
+                    PillOption(value: false, label: "Verwerfen"),
+                ])
             }
         }
-        .padding(16)
-        .glassPanel()
     }
 
-    private var modeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Verarbeitungsmodus").font(.headline)
-            Picker("Modus", selection: bindingForMode()) {
-                ForEach(ProcessingMode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
+    private var readingSection: some View {
+        PillSection("Vorlesen") {
+            PillRow(title: "Modus", subtitle: book.mode == .summary
+                    ? "Kapitel werden detailgetreu verdichtet — Fakten und Zahlen bleiben."
+                    : "Der Originaltext wird vollständig vorgelesen.") {
+                SegmentedPills(selection: bindingForMode(), options: ProcessingMode.allCases.map {
+                    PillOption(value: $0, label: $0.displayName, systemImage: $0 == .summary ? "text.redaction" : "text.alignleft")
+                })
             }
-            .pickerStyle(.segmented)
-
             if book.mode == .summary {
-                Text("Kapitel werden möglichst detailgetreu verdichtet (Redundanz und stilistische Ausschmückung entfernt, Fakten und Zahlen bleiben erhalten) — kein separater Detailgrad-Regler, das hat sich in Tests als zuverlässiger erwiesen als Prozent- oder Stufenvorgaben.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Picker("Dokumenttyp", selection: bindingForDocumentType()) {
-                    ForEach(DocumentType.allCases) { type in
-                        Text(type.displayName).tag(type)
-                    }
+                PillRow(title: "Dokumenttyp", subtitle: book.documentType.explanation) {
+                    SegmentedPills(selection: bindingForDocumentType(), options: DocumentType.allCases.map {
+                        PillOption(value: $0, label: $0.displayName, systemImage: $0.systemImage)
+                    })
                 }
-                Text(book.documentType.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            voiceCard
+            PillRow(title: "Tempo", subtitle: "Sprechgeschwindigkeit dieses Buchs.") {
+                PillSlider(value: bindingForSpeed(), range: 0.5...2.0, step: 0.05, format: "%.2f×")
+            }
+            PillRow(title: "Sprache des Buchs", subtitle: book.languageOverride == nil && book.detectedLanguageCode != nil ? "Automatisch erkannt" : "Von dir festgelegt") {
+                PillPicker(selection: bindingForBookLanguage(), options: languageChoices(including: book.languageCode).map {
+                    PillOption(value: $0, label: LanguageDetector.displayName($0))
+                })
+            }
+            if book.mode == .summary {
+                PillRow(title: "Sprache der Zusammenfassung", subtitle: "Vorgelesen wird in dieser Sprache — Stimme passend wählen.") {
+                    PillPicker(selection: bindingForSummaryLanguage(), options:
+                        [PillOption(value: String?.none, label: "Wie Original")] +
+                        LanguageDetector.selectableLanguages.map { PillOption(value: String?.some($0), label: LanguageDetector.displayName($0)) })
+                }
+            }
+            if let previewError = voicePreview.errorMessage {
+                Text(previewError).flowFont(.caption).foregroundStyle(.red).padding(.horizontal, 6)
+            }
+        }
+        .sheet(isPresented: $showVoiceGallery) {
+            VoiceGalleryView(
+                onSelect: { voiceID in
+                    update {
+                        $0.engineID = voiceID.engine
+                        $0.voice = voiceID.voice
+                    }
+                },
+                currentVoice: VoiceID(engine: book.engineID, voice: book.voice)
+            )
+        }
+    }
 
-            Divider()
-
-            HStack {
-                Picker("Sprache des Buchs", selection: bindingForBookLanguage()) {
-                    ForEach(languageChoices(including: book.languageCode), id: \.self) { code in
-                        Text(LanguageDetector.displayName(code) + (code == book.detectedLanguageCode && book.languageOverride == nil ? " (erkannt)" : "")).tag(code)
+    /// Narrator card: who reads this book, with direct choice + gallery.
+    private var voiceCard: some View {
+        let profile = VoiceCatalog.profile(for: VoiceID(engine: book.engineID, voice: book.voice))
+        let voices = TTSEngineFactory.availableVoices(for: book.engineID)
+        return HStack(spacing: 16) {
+            Image(systemName: "person.wave.2.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.tint)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.tint.opacity(0.14)))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sprecher:in")
+                    .flowFont(.caption, weight: .semibold)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+                Text(profile?.displayName ?? voices.first(where: { $0.id == book.voice })?.displayName ?? book.voice)
+                    .flowFont(.title3)
+                HStack(spacing: 6) {
+                    StatusBadge(text: book.engineID.shortName, systemImage: "cpu", tint: .secondary)
+                    if let profile {
+                        StatusBadge(text: profile.speed.label, systemImage: "hare")
                     }
                 }
-                if book.mode == .summary {
-                    Picker("Sprache der Zusammenfassung", selection: bindingForSummaryLanguage()) {
-                        Text("Wie Original").tag(String?.none)
-                        ForEach(LanguageDetector.selectableLanguages, id: \.self) { code in
-                            Text(LanguageDetector.displayName(code)).tag(String?.some(code))
+            }
+            Spacer(minLength: 12)
+            Menu {
+                Section("Engine") {
+                    ForEach(TTSEngineID.allCases) { engine in
+                        Button {
+                            update { $0.engineID = engine }
+                            if let first = TTSEngineFactory.availableVoices(for: engine).first,
+                               !TTSEngineFactory.availableVoices(for: engine).contains(where: { $0.id == book.voice }) {
+                                update { $0.voice = first.id }
+                            }
+                        } label: {
+                            if engine == book.engineID { Label(engine.shortName, systemImage: "checkmark") } else { Text(engine.shortName) }
                         }
                     }
                 }
-            }
-            Text(book.mode == .summary
-                 ? "Vorgelesen wird in der Sprache der Zusammenfassung; Bildbeschreibungen folgen ihr. Stimme passend wählen."
-                 : "Vorgelesen wird der Originaltext; Bildbeschreibungen werden in der Sprache des Buchs geschrieben. Wird beim Start neu erkannt, solange du sie nicht selbst festlegst.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Picker("Engine", selection: bindingForEngine()) {
-                    ForEach(TTSEngineID.allCases) { engine in
-                        Text(engine.displayName).tag(engine)
+                Section("Stimme") {
+                    ForEach(voices) { voice in
+                        Button {
+                            update { $0.voice = voice.id }
+                        } label: {
+                            if voice.id == book.voice { Label(voice.displayName, systemImage: "checkmark") } else { Text(voice.displayName) }
+                        }
                     }
                 }
-                Picker("Stimme", selection: bindingForVoice()) {
-                    ForEach(TTSEngineFactory.availableVoices(for: book.engineID)) { voice in
-                        Text(voice.displayName).tag(voice.id)
-                    }
-                }
+                Divider()
+                Button("In der Galerie durchhören …") { showVoiceGallery = true }
+            } label: {
+                Text("Ändern")
+                    .flowFont(.body, weight: .semibold)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(.tint.opacity(0.13)))
+                    .foregroundStyle(.tint)
             }
-            HStack {
-                Text("Geschwindigkeit: \(book.speechSpeed, specifier: "%.2f")×")
-                Slider(value: bindingForSpeed(), in: 0.5...2.0, step: 0.05)
-                    .frame(width: 220)
-                Spacer()
-                previewButton
-            }
-            if let previewError = voicePreview.errorMessage {
-                Text(previewError).font(.caption).foregroundStyle(.red)
-            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
-        .padding(16)
-        .glassPanel()
+        .padding(18)
+        .flowSurface(cornerRadius: Theme.Radius.row)
     }
 
     @ViewBuilder
@@ -206,179 +296,119 @@ struct ReviewView: View {
         Button {
             if voicePreview.isPlaying || voicePreview.isGenerating {
                 voicePreview.stop()
-            } else if let sampleText = book.sortedChapters.first?.textForNarration {
+            } else if let sampleText = book.sortedChapters.first(where: { !$0.textForNarration.isEmpty })?.textForNarration {
                 voicePreview.preview(text: sampleText, engineID: book.engineID, voice: book.voice, speed: book.speechSpeed, settings: settingsStore.settings)
             }
         } label: {
             if voicePreview.isGenerating {
-                Label("Erzeuge Vorschau …", systemImage: "waveform")
+                Label("Erzeuge Probe …", systemImage: "waveform")
             } else if voicePreview.isPlaying {
                 Label("Stopp", systemImage: "stop.fill")
             } else {
-                Label("Stimme testen", systemImage: "play.circle")
+                Label("Probe hören", systemImage: "play.fill")
             }
         }
+        .buttonStyle(FlowButtonStyle(variant: .secondary, size: .large))
         .disabled(book.chapters.isEmpty)
     }
 
     private var granularitySection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if book.mode == .transcription {
-                transcriptionGranularityContent
-            } else {
-                summaryGranularityContent
+        PillSection(book.mode == .transcription ? "Kapitel & Track-Größe" : "KI-Portionierung") {
+            VStack(alignment: .leading, spacing: 16) {
+                if book.mode == .transcription {
+                    transcriptionGranularityContent
+                } else {
+                    summaryGranularityContent
+                }
             }
+            .padding(18)
+            .flowSurface(cornerRadius: Theme.Radius.card)
         }
-        .padding(16)
-        .glassPanel()
     }
 
     private var transcriptionGranularityContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Kapiteleinteilung & Track-Größe").font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Bündelt Abschnitte zu Hörbuch-Tracks. Änderungen wirken sofort auf die Kapitel unten.")
+                    .flowFont(.callout)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 if book.targetChapterCharacters != nil && book.targetChapterCharacters != 0 {
-                    Button("Original-Gliederung") {
-                        updateTargetChapterCharacters(0)
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .foregroundStyle(Color.accentColor)
+                    Button("Original-Gliederung") { updateTargetChapterCharacters(0) }
+                        .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                 }
             }
-
-            Text("Bestimmt, wie viele Abschnitte zu einem gemeinsamen Hörbuch-Track gebündelt werden. Verändern passt die Kapitelstruktur sofort live an.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             HStack(spacing: 16) {
-                Slider(
-                    value: bindingForTargetChapterCharacters(),
-                    in: 2000...40000,
-                    step: 1000
-                )
+                Slider(value: bindingForTargetChapterCharacters(), in: 2000...40000, step: 1000)
                 Text(effectiveTargetChapterCharacters == 0 ? "Original" : "\(formatNumber(effectiveTargetChapterCharacters)) Zeichen")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .flowFont(.body, weight: .semibold)
+                    .monospacedDigit()
                     .frame(width: 130, alignment: .trailing)
             }
-
             HStack(spacing: 12) {
-                statCard(
-                    title: "Kapitel",
-                    value: "\(book.chapters.count)",
-                    detail: book.rawImportedChapters.map { "\($0.count) im Original" } ?? ""
-                )
-                statCard(
-                    title: "Durchschnitt",
-                    value: "\(formatNumber(averageChapterCharacters)) Zeichen",
-                    detail: "ca. \(formatNumber(averageChapterCharacters / 5)) Wörter"
-                )
-                statCard(
-                    title: "Dauer pro Track",
-                    value: formatDuration(minutes: estimatedMinutesPerChapter),
-                    detail: "bei normalem Tempo"
-                )
-                statCard(
-                    title: "Gesamtdauer",
-                    value: formatDuration(minutes: estimatedTotalMinutes),
-                    detail: String(format: "%.2f× Tempo", book.speechSpeed)
-                )
+                statCard(title: "Kapitel", value: "\(book.chapters.count)", detail: book.rawImportedChapters.map { String(localized: "\($0.count) im Original") } ?? "")
+                statCard(title: "Ø Länge", value: "\(formatNumber(averageChapterCharacters))", detail: String(localized: "Zeichen · ca. \(formatNumber(averageChapterCharacters / 6)) Wörter"))
+                statCard(title: "Pro Track", value: formatDuration(minutes: estimatedMinutesPerChapter), detail: L("bei normalem Tempo"))
+                statCard(title: "Gesamt", value: formatDuration(minutes: estimatedTotalMinutes), detail: String(format: L("bei %.2f× Tempo"), book.speechSpeed))
             }
         }
     }
 
     private var summaryGranularityContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("KI-Kontextgröße & Portionierung").font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Wie viel Text das Sprachmodell pro Aufruf liest. Kleiner = detailtreuer, größer = mehr Zusammenhang.")
+                    .flowFont(.callout)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 if book.summarizationBudget != nil {
-                    Button("Standard (\(formatNumber(settingsStore.settings.summarizationChunkCharacterBudget(for: book.documentType))))") {
-                        updateSummarizationBudget(nil)
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .foregroundStyle(Color.accentColor)
+                    Button("Standard") { updateSummarizationBudget(nil) }
+                        .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                 }
             }
-
-            Text("Bestimmt, wie viel Text das Sprachmodell (LLM) pro Aufruf auf einmal liest. Kleinere Portionen (15k–25k) verhindern Vergessen und wahren Details; größere Portionen (35k–60k) erfassen größere Zusammenhänge schneller.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             HStack(spacing: 16) {
-                Slider(
-                    value: bindingForSummarizationBudget(),
-                    in: 8000...70000,
-                    step: 2000
-                )
+                Slider(value: bindingForSummarizationBudget(), in: 8000...70000, step: 2000)
                 Text("\(formatNumber(effectiveSummarizationBudget)) Zeichen")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .flowFont(.body, weight: .semibold)
+                    .monospacedDigit()
                     .frame(width: 130, alignment: .trailing)
             }
-
+            let calls = plannedLLMCalls
             HStack(spacing: 12) {
-                statCard(
-                    title: "LLM-Aufrufe",
-                    value: "\(plannedLLMCalls)",
-                    detail: "\(settingsStore.settings.activeParallelRequests) parallel"
-                )
-                statCard(
-                    title: "Kontext pro Call",
-                    value: "\(formatNumber(averageContextCharacters)) Zeichen",
-                    detail: "~ \(formatNumber(averageContextTokens)) Tokens"
-                )
-                statCard(
-                    title: "Geschätzte Dauer",
-                    value: formatLLMDuration(calls: plannedLLMCalls),
-                    detail: "\(settingsStore.settings.llmProvider.displayName)"
-                )
-                statCard(
-                    title: "Eingangstext",
-                    value: "\(formatNumber(totalCharacters)) Zeichen",
-                    detail: "\(book.chapters.count) Abschnitte"
-                )
+                statCard(title: "KI-Aufrufe", value: "\(calls)", detail: String(localized: "\(settingsStore.settings.activeParallelRequests) parallel"))
+                statCard(title: "Kontext", value: "\(formatNumber(totalCharacters / max(calls, 1)))", detail: "Zeichen · ~\(formatNumber(Int(Double(totalCharacters / max(calls, 1)) / 4.2))) Tokens")
+                statCard(title: "Dauer", value: formatLLMDuration(calls: calls), detail: settingsStore.settings.llmProvider.displayName)
+                statCard(title: "Eingang", value: "\(formatNumber(totalCharacters))", detail: "Zeichen · \(book.chapters.count) Abschnitte")
             }
-
             DisclosureGroup("Eingangs-Gliederung anpassen (\(book.chapters.count) Abschnitte)") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        Slider(
-                            value: bindingForTargetChapterCharacters(),
-                            in: 2000...40000,
-                            step: 1000
-                        )
-                        Text(effectiveTargetChapterCharacters == 0 ? "Original" : "\(formatNumber(effectiveTargetChapterCharacters)) Zeichen")
-                            .font(.caption.monospacedDigit().weight(.semibold))
-                            .frame(width: 110, alignment: .trailing)
-                    }
-                    Text("Gliedert die Abschnitte vor dem Senden an das Modell grober oder feiner vor.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    Slider(value: bindingForTargetChapterCharacters(), in: 2000...40000, step: 1000)
+                    Text(effectiveTargetChapterCharacters == 0 ? "Original" : "\(formatNumber(effectiveTargetChapterCharacters)) Zeichen")
+                        .flowFont(.callout, weight: .semibold)
+                        .monospacedDigit()
+                        .frame(width: 110, alignment: .trailing)
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
             }
-            .font(.caption)
+            .flowFont(.callout)
         }
     }
 
     private func statCard(title: String, value: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(L(title)).flowFont(.caption, weight: .medium).foregroundStyle(.secondary)
             Text(value)
-                .font(.headline)
+                .flowFont(.title3)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             if !detail.isEmpty {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Text(L(detail)).flowFont(.caption2).foregroundStyle(.secondary).lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var effectiveTargetChapterCharacters: Int {
@@ -477,19 +507,11 @@ struct ReviewView: View {
     private func formatNumber(_ number: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        formatter.groupingSeparator = "."
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 
     private func formatDuration(minutes: Double) -> String {
-        let totalMins = Int(minutes.rounded())
-        let hours = totalMins / 60
-        let mins = totalMins % 60
-        if hours > 0 {
-            return "\(hours) Std. \(mins) Min."
-        } else {
-            return "\(mins) Min."
-        }
+        ListeningTimeFormatter.long(minutes * 60)
     }
 
     private func formatLLMDuration(calls: Int) -> String {
@@ -497,44 +519,105 @@ struct ReviewView: View {
         let totalSeconds = (Double(calls) * 16.0) / Double(parallel)
         let totalMins = Int(ceil(totalSeconds / 60.0))
         if totalMins <= 1 {
-            return "< 1 Min."
+            return L("< 1 Min.")
         } else {
-            return "ca. \(totalMins) Min."
+            return String(localized: "ca. \(totalMins) Min.")
         }
     }
 
     private var outputSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Ausgabe").font(.headline)
-            Picker("Format", selection: bindingForFormat()) {
-                ForEach(OutputFormat.allCases) { format in
-                    Text(format.displayName).tag(format)
+        PillSection("Ausgabe", footer: "Ziel: " + (settingsStore.settings.outputBaseFolderPath as NSString).abbreviatingWithTildeInPath + "/" + settingsStore.settings.outputFolderTemplate.relativePath(title: book.title, author: book.author)) {
+            PillRow(title: "Format") {
+                SegmentedPills(selection: bindingForFormat(), options: [
+                    PillOption(value: OutputFormat.m4b, label: "M4B-Hörbuch", shortLabel: "M4B"),
+                    PillOption(value: OutputFormat.m4a, label: "M4A", shortLabel: "M4A"),
+                    PillOption(value: OutputFormat.mp3Chapters, label: "MP3-Kapitel", shortLabel: "MP3"),
+                ])
+            }
+        }
+    }
+
+    /// "Vorbereitung prüfen" (plan 6.7) as a compact proofreading card —
+    /// visible at a glance instead of hidden in a disclosure.
+    private var preparationSection: some View {
+        let report = preparationReport ?? PreparationReport()
+        return PillSection("Korrektur gelesen", footer: "Der gespeicherte Text bleibt unverändert — alle Regeln wirken nur auf das Vorgelesene.") {
+            VStack(alignment: .leading, spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], alignment: .leading, spacing: 10) {
+                    proofItem("\(report.boxLabelOnlyLines + report.boxLabelPrefixes)", "Box-Labels", "tag")
+                    proofItem("\(report.listItems)", "Aufzählungen", "list.bullet")
+                    proofItem("\(report.headingNumbersStripped)", "Überschriften-Nummern", "number")
+                    proofItem("\(report.tocSuggested)", "Verzeichnisse übersprungen", "speaker.slash")
+                    if report.excludedByUser > 0 {
+                        proofItem("\(report.excludedByUser)", "von dir ausgeschlossen", "person.crop.circle.badge.xmark")
+                    }
+                }
+                if !report.suspiciousChapters.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Bitte ansehen: sehr kurz oder beginnt mitten im Satz", systemImage: "exclamationmark.bubble")
+                            .flowFont(.callout, weight: .semibold)
+                            .foregroundStyle(.orange)
+                        ForEach(report.suspiciousChapters, id: \.self) { title in
+                            Text("• \(title)").flowFont(.callout).foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
-            Text("Zielordner: \(settingsStore.settings.outputBaseFolderPath)/\(settingsStore.settings.outputFolderTemplate.relativePath(title: book.title, author: book.author))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .padding(18)
+            .flowSurface(cornerRadius: Theme.Radius.card)
         }
-        .padding(16)
-        .glassPanel()
+    }
+
+    private func proofItem(_ value: String, _ label: String, _ image: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: image).foregroundStyle(.tint).frame(width: 20)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value).flowFont(.headline).monospacedDigit()
+                Text(L(label)).flowFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var chapterSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Kapitel (\(book.chapters.count))").font(.headline)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Inhalt")
+                    .font(.system(size: 24, weight: .semibold, design: .serif))
+                Text("\(book.chapters.count) Kapitel")
+                    .flowFont(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Ziehen zum Umsortieren · Titel direkt bearbeiten")
+                    .flowFont(.caption)
+                    .foregroundStyle(.tertiary)
                 Button {
                     splitEditorTargetChapterID = nil
                     showSplitEditor = true
                 } label: {
-                    Image(systemName: "book.pages")
+                    Label("Gliederung bearbeiten", systemImage: "book.pages")
                 }
-                .help("Kapitelstruktur bearbeiten")
-                Spacer()
-                Text("Zum Umsortieren ziehen").font(.caption).foregroundStyle(.secondary)
+                .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
             }
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(Array(book.sortedChapters.enumerated()), id: \.element.id) { index, chapter in
+                    if let group = chapter.groupTitle,
+                       group != (index > 0 ? book.sortedChapters[index - 1].groupTitle : nil) {
+                        HStack {
+                            Text(group)
+                                .flowFont(.caption, weight: .semibold)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .tracking(0.8)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+                        .accessibilityAddTraits(.isHeader)
+                    }
                     ChapterRow(
                         chapter: chapter,
                         index: index,
@@ -544,7 +627,8 @@ struct ReviewView: View {
                         onSplit: {
                             splitEditorTargetChapterID = chapter.id
                             showSplitEditor = true
-                        }
+                        },
+                        onToggleNarration: { included in setNarrationIncluded(chapterID: chapter.id, included: included) }
                     )
                     .draggable(chapter.id.uuidString)
                     .dropDestination(for: String.self) { droppedIDs, _ in
@@ -552,12 +636,10 @@ struct ReviewView: View {
                         moveChapter(draggedID: draggedID, toIndex: index)
                         return true
                     }
-                    if index < book.chapters.count - 1 {
-                        Divider()
-                    }
                 }
             }
-            .glassPanel()
+            .padding(.vertical, 8)
+            .flowSurface(cornerRadius: Theme.Radius.card)
             .sheet(isPresented: $showSplitEditor) {
                 ChapterSplitEditorView(bookID: bookID, targetChapterID: splitEditorTargetChapterID)
             }
@@ -651,6 +733,16 @@ struct ReviewView: View {
         }
     }
 
+    /// "Nicht vorlesen" per chapter (plan 6.2): the classification only
+    /// suggests — this is the user's binding decision.
+    private func setNarrationIncluded(chapterID: UUID, included: Bool) {
+        update { book in
+            if let index = book.chapters.firstIndex(where: { $0.id == chapterID }) {
+                book.chapters[index].includeInNarration = included
+            }
+        }
+    }
+
     private func mergeWithPrevious(chapterID: UUID) {
         update { book in
             let sorted = book.sortedChapters
@@ -709,23 +801,55 @@ private struct ChapterRow: View {
     var onMergeWithPrevious: (() -> Void)?
     var onDelete: (() -> Void)?
     var onSplit: (() -> Void)?
+    var onToggleNarration: (Bool) -> Void
+
+    /// nil = user hasn't decided yet; the classification's suggestion
+    /// (TOC/front matter) is shown as a soft hint.
+    private var narrationExcluded: Bool {
+        if let included = chapter.includeInNarration { return !included }
+        return chapter.matterKind.map(FrontBackMatterClassifier.suggestsSkipping) ?? false
+    }
 
     @State private var title: String = ""
+    @State private var hovering = false
 
     var body: some View {
-        HStack {
-            Text("\(index + 1).")
-                .foregroundStyle(.secondary)
-                .frame(width: 28, alignment: .trailing)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(index + 1)")
+                .flowFont(.caption, weight: .semibold)
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                .frame(width: 26, alignment: .trailing)
             TextField("Kapiteltitel", text: $title)
                 .textFieldStyle(.plain)
+                .font(.system(size: 14, design: .serif))
+                .strikethrough(narrationExcluded, color: .secondary)
+                .foregroundStyle(narrationExcluded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                 .onAppear { title = chapter.title }
                 .onChange(of: title) { _, newValue in onRename(newValue) }
-            Spacer()
-            Text("\(chapter.cleanedText.count) Zeichen")
-                .font(.caption)
+                .layoutPriority(1)
+            if narrationExcluded {
+                Image(systemName: "speaker.slash.fill")
+                    .foregroundStyle(.orange)
+                    .help("Wird nicht vorgelesen\(chapter.includeInNarration == nil ? " (Vorschlag der automatischen Erkennung — z. B. Inhaltsverzeichnis/Titelei)" : "")")
+            }
+            DottedLeader().frame(minWidth: 16)
+            Text(Self.minutesLabel(chapter.cleanedText.count))
+                .flowFont(.caption)
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
+                .help("\(chapter.cleanedText.count) Zeichen")
             Menu {
+                if let included = chapter.includeInNarration {
+                    if included {
+                        Button("Nicht vorlesen", action: { onToggleNarration(false) })
+                    } else {
+                        Button("Wieder vorlesen", action: { onToggleNarration(true) })
+                    }
+                } else {
+                    Button("Nicht vorlesen", action: { onToggleNarration(false) })
+                    Button("Auf jeden Fall vorlesen", action: { onToggleNarration(true) })
+                }
                 if let onSplit {
                     Button("Kapitel teilen …", action: onSplit)
                 }
@@ -733,15 +857,31 @@ private struct ChapterRow: View {
                     Button("Mit vorherigem zusammenführen", action: onMergeWithPrevious)
                 }
                 if let onDelete {
+                    Divider()
                     Button("Löschen", role: .destructive, action: onDelete)
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
+                    .frame(width: 24, height: 20)
+                    .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 24)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .foregroundStyle(.secondary)
+            .opacity(hovering ? 1 : 0.35)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(hovering ? 0.04 : 0)))
+        .padding(.horizontal, 6)
+        .onHover { hovering = $0 }
+    }
+
+    /// Characters → spoken minutes (≈ 950 characters per minute).
+    static func minutesLabel(_ characters: Int) -> String {
+        let minutes = Double(characters) / 950
+        if minutes < 1 { return "< 1 Min." }
+        return "\(Int(minutes.rounded())) Min."
     }
 }

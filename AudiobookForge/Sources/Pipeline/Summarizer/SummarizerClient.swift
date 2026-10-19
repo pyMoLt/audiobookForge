@@ -47,13 +47,17 @@ struct SummarizerClient: Sendable {
     /// text into via "## heading" markers.
     struct AIChapterResult: Sendable, Equatable {
         let title: String
+        /// The original parent chapter this AI heading belongs to (books
+        /// only — plan 7.3). Kept separate from `title` so the UI can show
+        /// a hierarchy and packaging builds "Gruppe — Titel" names.
+        var groupTitle: String?
         /// The original (pre-summarization) source text this came from —
         /// shared verbatim by every result derived from the same batch, since
         /// the model both compresses and reorganizes, so there's no exact
         /// substring of the input that maps to just one of its headings.
         /// Used for the original-vs-summary diff view.
         let sourceText: String
-        let summarizedText: String
+        var summarizedText: String
     }
 
     /// Turns a document's original (fine-grained, extraction-time) chapters
@@ -98,8 +102,13 @@ struct SummarizerClient: Sendable {
             let parentTitle: String
             let piece: String
             let label: String
+            /// Continuity context (plan 7.4): tail of the previous piece's
+            /// SOURCE within the same batch, `nil` for a batch's first piece
+            /// and for pieces starting at a real topic boundary.
+            let context: String?
         }
         var items: [WorkItem] = []
+        let useContinuity = settings.aiChapterContinuityEnabled
         for (batchNumber, indices) in batches.enumerated() {
             let batchChapters = indices.map { chapters[$0] }
             let combinedRaw = batchChapters.map(\.text).joined(separator: "\n\n")
@@ -107,16 +116,20 @@ struct SummarizerClient: Sendable {
             // than the cap, or one very long book chapter) — split it at
             // paragraph boundaries so each call stays within budget.
             let pieces = combinedRaw.count > budget ? Self.chunk(text: combinedRaw, maxCharacters: budget) : [combinedRaw]
+            var previousPiece: String?
             for (pieceIndex, piece) in pieces.enumerated() {
                 let pieceLabel = pieces.count > 1 ? " (Teil \(pieceIndex + 1)/\(pieces.count))" : ""
-                items.append(WorkItem(order: items.count, batchNumber: batchNumber, chapterCount: indices.count, parentTitle: batchChapters[0].title, piece: piece, label: "Abschnitt \(batchNumber + 1)/\(batches.count)\(pieceLabel)"))
+                let context = useContinuity && pieceIndex > 0 && previousPiece != nil && !Self.startsWithTopicBoundary(piece)
+                    ? Self.contextTail(of: previousPiece!) : nil
+                items.append(WorkItem(order: items.count, batchNumber: batchNumber, chapterCount: indices.count, parentTitle: batchChapters[0].title, piece: piece, label: "Abschnitt \(batchNumber + 1)/\(batches.count)\(pieceLabel)", context: context))
+                previousPiece = piece
             }
         }
 
         let totalCharacters = items.reduce(0) { $0 + $1.piece.count }
         let progressState = LockedBox(Progress(completedCalls: 0, totalCalls: items.count, completedCharacters: 0, totalCharacters: totalCharacters))
         onStructuredProgress?(progressState.withLock { $0 })
-        let parallel = min(settings.activeParallelRequests, max(1, items.count))
+        let parallel = min(PowerProfile.current.llmRequests(configured: settings.activeParallelRequests), max(1, items.count))
         onProgress?("\(items.count) LLM-Aufruf(e) geplant, \(parallel) parallel, Thinking: \(settings.activeGenerationOptions.thinkingMode.displayName).")
 
         let llm = LLMClient(settings: settings)
@@ -126,7 +139,7 @@ struct SummarizerClient: Sendable {
             func launch(_ item: WorkItem) {
                 group.addTask {
                     onProgress?("Fasse \(item.label) zusammen (\(item.chapterCount) Kapitel, ~\(item.piece.count / 1000)k Zeichen) …")
-                    let texts = try await self.summarizePiece(item.piece, bookTitle: bookTitle, outputLanguage: outputLanguage, llm: llm, contextWindow: contextWindow, label: item.label, depth: 0, onProgress: onProgress) { tps in
+                    let texts = try await self.summarizePiece(item.piece, bookTitle: bookTitle, outputLanguage: outputLanguage, llm: llm, contextWindow: contextWindow, label: item.label, depth: 0, context: item.context, onProgress: onProgress) { tps in
                         progressState.withLock { $0.lastTokensPerSecond = tps }
                     }
                     let snapshot = progressState.withLock { state -> Progress in
@@ -157,7 +170,14 @@ struct SummarizerClient: Sendable {
                 results.append(contentsOf: aiChapters(from: response, item: (parentTitle: item.parentTitle, piece: item.piece), documentType: documentType, onProgress: onProgress))
             }
         }
-        return Self.splitOversizedChapters(results, maxCharacters: settings.aiChapterMaxCharacters, onProgress: onProgress)
+        let merged = AIChapterMerger.merge(
+            Self.splitOversizedChapters(results, maxCharacters: settings.aiChapterMaxCharacters, onProgress: onProgress),
+            minCharacters: settings.minAIChapterCharacters
+        )
+        if merged.count != results.count {
+            onProgress?("KI-Kapitel unter \(settings.minAIChapterCharacters) Zeichen zusammengeführt: \(results.count) → \(merged.count) Kapitel.")
+        }
+        return merged
     }
 
     /// Splits AI chapters longer than `maxCharacters` at paragraph
@@ -184,10 +204,13 @@ struct SummarizerClient: Sendable {
     /// drop the end of the section — instead the piece is halved at a
     /// paragraph boundary and each half summarized on its own (up to two
     /// levels deep). Returns one response per final sub-piece, in order.
-    private func summarizePiece(_ piece: String, bookTitle: String, outputLanguage: String?, llm: LLMClient, contextWindow: Int?, label: String, depth: Int, onProgress: (@Sendable (String) -> Void)?, onSpeed: @escaping @Sendable (Double) -> Void) async throws -> [String] {
+    private func summarizePiece(_ piece: String, bookTitle: String, outputLanguage: String?, llm: LLMClient, contextWindow: Int?, label: String, depth: Int, context: String?, onProgress: (@Sendable (String) -> Void)?, onSpeed: @escaping @Sendable (Double) -> Void) async throws -> [String] {
         try Task.checkCancellation()
         let sanitized = Self.sanitizeHeadingMarkers(piece)
         var prompt = fillTemplate(settings.promptTemplates.userPromptTemplate, text: sanitized, bookTitle: bookTitle)
+        if let context, settings.aiChapterContinuityEnabled {
+            prompt += "\n\n" + ResponsePostprocess.contextMarker + "\n" + context
+        }
         if let outputLanguage {
             // Explicit target language overrides "same language as the source".
             prompt += "\n\nWrite the entire output, including the headings, in \(outputLanguage)."
@@ -195,7 +218,11 @@ struct SummarizerClient: Sendable {
         let completion = try await llm.complete(system: settings.promptTemplates.systemPrompt, user: prompt, purpose: .summary, inputCharacters: prompt.count + settings.promptTemplates.systemPrompt.count, contextWindow: contextWindow)
         if let tps = completion.tokensPerSecond { onSpeed(tps) }
 
-        var stats = "\(completion.content.count) Zeichen, \(String(format: "%.0f", completion.durationSeconds)) s"
+        // Defensive cleanup (plan 7.5): meta phrases, collapsed duplicate
+        // headings, and an echoed continuity context never reach narration.
+        var content = ResponsePostprocess.clean(completion.content, echoedContext: (context != nil && settings.aiChapterContinuityEnabled) ? context : nil)
+
+        var stats = "\(content.count) Zeichen, \(String(format: "%.0f", completion.durationSeconds)) s"
         if let tokens = completion.completionTokens { stats += ", \(tokens) Tokens" }
         if let reasoning = completion.reasoningTokens, reasoning > 0 { stats += " (davon \(reasoning) Thinking)" }
         if let tps = completion.tokensPerSecond { stats += String(format: ", %.0f Tok/s", tps) }
@@ -206,16 +233,28 @@ struct SummarizerClient: Sendable {
             onProgress?("    ⚠︎ Thinking-Budget (\(budget)) ausgeschöpft — Antwort kann Denk-Reste enthalten. Budget erhöhen oder Thinking ausschalten.")
         }
 
-        guard completion.wasTruncated else { return [completion.content] }
+        guard completion.wasTruncated else { return [content] }
         guard depth < 2, piece.count > 4000 else {
             onProgress?("    ⚠︎ \(label): Antwort wurde wegen Längenlimit abgeschnitten und kann nicht weiter geteilt werden — übernommen wie geliefert.")
-            return [completion.content]
+            return [content]
         }
         onProgress?("    ⚠︎ \(label): Antwort am Längenlimit abgeschnitten — teile Abschnitt in zwei Hälften und fasse neu zusammen.")
         let halves = Self.halve(piece)
         var outputs: [String] = []
         for (index, half) in halves.enumerated() {
-            outputs += try await summarizePiece(half, bookTitle: bookTitle, outputLanguage: outputLanguage, llm: llm, contextWindow: contextWindow, label: "\(label).\(index + 1)", depth: depth + 1, onProgress: onProgress, onSpeed: onSpeed)
+            // Continuity: the first half inherits the piece's context; the
+            // second half bridges from the end of the first half's source.
+            let halfContext: String?
+            if settings.aiChapterContinuityEnabled {
+                if index == 0 {
+                    halfContext = context
+                } else {
+                    halfContext = Self.startsWithTopicBoundary(half) ? nil : Self.contextTail(of: halves[0])
+                }
+            } else {
+                halfContext = nil
+            }
+            outputs += try await summarizePiece(half, bookTitle: bookTitle, outputLanguage: outputLanguage, llm: llm, contextWindow: contextWindow, label: "\(label).\(index + 1)", depth: depth + 1, context: halfContext, onProgress: onProgress, onSpeed: onSpeed)
         }
         return outputs
     }
@@ -233,9 +272,50 @@ struct SummarizerClient: Sendable {
         let headingNames = sections.map(\.heading).joined(separator: " | ")
         onProgress?("    -> \(sections.count) Kapitel-Abschnitte erkannt: [\(headingNames.prefix(120))]")
         return sections.map { section in
-            let title = (documentType == .book && section.heading != parentTitle) ? "\(parentTitle) — \(section.heading)" : section.heading
-            return AIChapterResult(title: title, sourceText: piece, summarizedText: section.text)
+            // Books keep their real chapter as the parent (`groupTitle`);
+            // the AI heading is the fine-grained title. Packaging composes
+            // "Gruppe — Titel" from both (plan 7.3). Other document types
+            // have no meaningful parent — their batch's lead chapter title
+            // is not a hierarchy level — so they stay flat.
+            let groupTitle = documentType == .book ? parentTitle : nil
+            return AIChapterResult(title: section.heading, groupTitle: groupTitle, sourceText: piece, summarizedText: section.text)
         }
+    }
+
+    /// Last ~`maxCharacters` of a chunk's SOURCE, cut to start at a sentence
+    /// boundary if possible (falling back to a word boundary) — the
+    /// continuity context for the next call (plan 7.4). Taken from the
+    /// source, not from any answer, so every call can start immediately and
+    /// in parallel.
+    static func contextTail(of text: String, maxCharacters: Int = 600) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard maxCharacters > 0, trimmed.count > maxCharacters else { return trimmed }
+        let tail = String(trimmed.suffix(maxCharacters))
+
+        // Prefer starting right after the first sentence end inside the
+        // tail; fall back to the first word boundary.
+        if let sentenceEnd = tail.firstRange(of: ". ") ?? tail.firstRange(of: "! ") ?? tail.firstRange(of: "? ") {
+            let candidate = String(tail[sentenceEnd.upperBound...])
+            if !candidate.isEmpty { return candidate }
+        }
+        if let firstSpace = tail.firstIndex(of: " ") {
+            let candidate = String(tail[tail.index(after: firstSpace)...])
+            if !candidate.isEmpty { return candidate }
+        }
+        return tail
+    }
+
+    /// True when a chunk begins at a real topic boundary — a heading-like
+    /// line (short, no sentence punctuation) that opens the piece. Continuity
+    /// context is skipped there (plan 7.4): a fresh section needs no bridge.
+    static func startsWithTopicBoundary(_ piece: String) -> Bool {
+        guard let firstLine = piece.split(separator: "\n", omittingEmptySubsequences: true).first else { return false }
+        let line = firstLine.trimmingCharacters(in: .whitespaces)
+        guard !line.isEmpty, line.count <= 80 else { return false }
+        let trailing = line.last ?? "."
+        if ".!?;:,".contains(trailing) { return false }
+        return line.first?.isLetter ?? false
+            || (line.first?.isNumber == true && line.contains(where: \.isLetter))
     }
 
     /// Groups original chapters into batches for one summarization call

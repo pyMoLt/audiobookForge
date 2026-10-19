@@ -53,10 +53,15 @@ struct PiperEngine: TTSEngine {
             throw TTSEngineError.notReady("Piper-Stimme '\(voice)' wurde noch nicht heruntergeladen.")
         }
 
-        let sentences = SentenceSplitter.split(text)
+        // App-side pause engine (plan 8.4): Swift writes the planned
+        // silence itself — as zero bytes straight into the encoder's PCM
+        // stream — so segment timing (and read-along) includes the pauses.
+        let plannedSegments = PausePlanner.plan(text)
+        let sentences = plannedSegments.map(\.text)
         guard !sentences.isEmpty else {
             throw TTSEngineError.processFailed("Kein Text zum Vorlesen gefunden.")
         }
+        let pausePlan = PausePlanner.pausePlan(for: plannedSegments, determinismKey: outputURL.path, settings: settings)
 
         onProgress(.modelLoaded)
         onProgress(.plannedSegments(sentences.count))
@@ -64,18 +69,37 @@ struct PiperEngine: TTSEngine {
         let sampleRate = voiceSampleRate(voice: voice)
         let encoder = try ChapterAudioEncoder.start(sampleRate: sampleRate, outputURL: outputURL, settings: settings, stdinPipe: Pipe())
 
+        func silenceBytes(milliseconds: Int) -> Data {
+            Data(count: Int(Double(sampleRate) * Double(milliseconds) / 1000.0) * 2)
+        }
+
         do {
             var segments: [TTSSegment] = []
             var cumulative = 0.0
 
+            if pausePlan.leadInMs > 0 {
+                try encoder.write(silenceBytes(milliseconds: pausePlan.leadInMs))
+                cumulative += Double(pausePlan.leadInMs) / 1000.0
+            }
+
             for (index, sentence) in sentences.enumerated() {
                 try Task.checkCancellation()
                 let byteCount = try await synthesizeSentence(sentence, voice: voice, speed: speed, encoder: encoder)
-                let duration = Double(byteCount) / (2.0 * Double(sampleRate))
+                var duration = Double(byteCount) / (2.0 * Double(sampleRate))
+                let pauseMs = index < pausePlan.pauseAfterMs.count ? pausePlan.pauseAfterMs[index] : 0
+                if pauseMs > 0 {
+                    try encoder.write(silenceBytes(milliseconds: pauseMs))
+                    duration += Double(pauseMs) / 1000.0
+                }
 
                 segments.append(TTSSegment(index: index, startSeconds: cumulative, durationSeconds: duration, text: sentence))
                 cumulative += duration
                 onProgress(.segmentDone(index: index, durationSeconds: duration))
+            }
+
+            if pausePlan.tailMs > 0 {
+                try encoder.write(silenceBytes(milliseconds: pausePlan.tailMs))
+                cumulative += Double(pausePlan.tailMs) / 1000.0
             }
 
             let duration = try await encoder.finish()
@@ -116,6 +140,10 @@ struct PiperEngine: TTSEngine {
             "-c", configURL.path,
             "--output-raw",
             "--length-scale", String(lengthScale),
+            // "Lebendigkeit" (plan 8.5): prosodic variance / pronunciation
+            // noise, editable in Erweitert.
+            "--noise-scale", String(settings.piperNoiseScale),
+            "--noise-w", String(settings.piperNoiseW),
         ]
 
         let inputPipe = Pipe()
@@ -168,10 +196,13 @@ struct PiperEngine: TTSEngine {
             }
 
             do {
+                process.applyPowerProfile()
                 try process.run()
                 if cancelled.withLock({ $0 }) { process.terminate() }
                 if let data = (sentence + "\n").data(using: .utf8) {
-                    inputPipe.fileHandleForWriting.write(data)
+                    // Throwing Swift API (an ObjC `write` would raise an
+                    // uncatchable exception when piper already exited).
+                    try inputPipe.fileHandleForWriting.write(contentsOf: data)
                 }
                 try? inputPipe.fileHandleForWriting.close()
             } catch {

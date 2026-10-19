@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "language": "de",
+  "exact": [
+    { "from": "Z. n.", "to": "Zustand nach" },
+    { "from": "V. a.", "to": "Verdacht auf" },
+    { "from": "z. B.", "to": "zum Beispiel" },
+    { "from": "s.c.", "to": "subkutan" },
+    { "from": "i.m.", "to": "intramuskulär" },
+    { "from": "p.o.", "to": "per os" },
+    { "from": "ggf.", "to": "gegebenenfalls" },
+    { "from": "o. B.", "to": "ohne Befund" },
+    { "from": "RF", "to": "Risikofaktor" }
+  ]
+}

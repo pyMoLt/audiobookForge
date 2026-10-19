@@ -3,6 +3,15 @@ import Foundation
 struct TTSVoiceOption: Identifiable, Hashable, Sendable {
     let id: String
     let displayName: String
+
+    /// Names carry a German gender tag ("Heart (US, weiblich)"); translate
+    /// just that word so the voice lists follow the app language.
+    init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+            .replacingOccurrences(of: "weiblich", with: L("weiblich"))
+            .replacingOccurrences(of: "männlich", with: L("männlich"))
+    }
 }
 
 enum TTSProgressEvent: Sendable {
@@ -66,7 +75,15 @@ extension TTSEngine {
 }
 
 enum TTSEngineFactory {
+    /// Test hook: when set, `engine(for:settings:)` returns this instead
+    /// of a real engine. Lets pause/resume and pipeline tests run with a
+    /// deterministic fake (no bridge, no model downloads).
+    nonisolated(unsafe) static var engineOverride: ((TTSEngineID) -> TTSEngine)?
+
     static func engine(for id: TTSEngineID, settings: AppSettings) -> TTSEngine {
+        if let engineOverride {
+            return engineOverride(id)
+        }
         switch id {
         case .kokoro:
             return KokoroEngine(settings: settings, bridge: BridgeEnvironmentManager.shared)
@@ -76,6 +93,10 @@ enum TTSEngineFactory {
             return KokoroEngine(settings: settings, bridge: BridgeEnvironmentManager.shared, id: id)
         case .supertonic3:
             return SupertonicEngine(settings: settings, environment: SupertonicEnvironmentManager.shared)
+        case .omniVoice:
+            return OmniVoiceEngine(settings: settings, environment: OmniVoiceEnvironmentManager.shared)
+        case .appleSystem:
+            return AppleSpeechEngine(settings: settings)
         }
     }
 

@@ -30,6 +30,8 @@ final class ChapterAudioStoreTests: XCTestCase {
         XCTAssertEqual(m4aURL.lastPathComponent, "007.m4a")
         XCTAssertTrue(m4aURL.path.contains(bookID.uuidString))
         XCTAssertTrue(m4aURL.path.hasPrefix(root.path))
+        // Pure path computation: does not create the directory as a side effect
+        XCTAssertFalse(FileManager.default.fileExists(atPath: m4aURL.deletingLastPathComponent().path))
 
         let m4aAltURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: 7, format: .m4a, root: root)
         XCTAssertEqual(m4aAltURL.lastPathComponent, "007.m4a")
@@ -40,8 +42,7 @@ final class ChapterAudioStoreTests: XCTestCase {
 
     func testRemoveChapterAudioDeletesDirectory() throws {
         let bookID = UUID()
-        let url = ChapterAudioStore.chapterFileURL(bookID: bookID, order: 0, format: .m4b, root: root)
-        let directory = url.deletingLastPathComponent()
+        let directory = try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: root)
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
 
         ChapterAudioStore.removeChapterAudio(bookID: bookID, root: root)
@@ -60,8 +61,6 @@ final class ChapterAudioStoreTests: XCTestCase {
         let removed = ChapterAudioStore.removeOrphanChapterAudio(keeping: [keepID], root: root)
 
         XCTAssertEqual(removed, 1)
-        // Assert on raw paths — chapterFileURL creates the directory as a
-        // side effect and would resurrect it under the assertion.
         let keepDir = root.appendingPathComponent(keepID.uuidString, isDirectory: true)
         let orphanDir = root.appendingPathComponent(orphanID.uuidString, isDirectory: true)
         XCTAssertTrue(FileManager.default.fileExists(atPath: keepDir.path))
@@ -90,6 +89,7 @@ final class ChapterAudioStoreTests: XCTestCase {
         let library = LibraryStore(fileURL: libraryFile)
 
         let bookID = UUID()
+        try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: root)
         let wavURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: 0, format: .m4b, root: root)
             .deletingLastPathComponent().appendingPathComponent("000.wav")
         try await makeLegacyWAV(at: wavURL)

@@ -15,6 +15,10 @@ echo "STEP Suche nach einer Python-Installation …"
 
 PYTHON_BIN=""
 for candidate in \
+    "${APP_RUNTIME_PYTHON:-}" \
+    "$HOME/Library/Application Support/AudiobookForge/runtime/python/bin/python3" \
+    "$HOME/Library/Application Support/AudiobookForge/runtime/python/bin/python3.12" \
+    "$HOME/Library/Application Support/AudiobookForge/runtime/python/bin/python3.11" \
     /opt/homebrew/bin/python3.12 \
     /opt/homebrew/bin/python3.11 \
     /usr/local/bin/python3.12 \

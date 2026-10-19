@@ -29,20 +29,24 @@ struct SummaryDiffView: View {
                 ProgressView("Vergleiche Texte …")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HSplitView {
+                // An open book: original on the left page, summary on the right.
+                HStack(spacing: 0) {
                     column(title: "Original") { originalColumn }
+                    LinearGradient(colors: [Color.black.opacity(0.0), Color.black.opacity(0.14), Color.black.opacity(0.0)], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 26)
                     column(title: "Zusammenfassung (vorgelesen)") { summaryColumn }
                 }
             }
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: 820, minHeight: 560)
+        .background { PaperPage() }
         .task { computeDiff() }
     }
 
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(chapterTitle).font(.headline)
+                Text(chapterTitle).font(.system(size: 20, weight: .semibold, design: .serif))
                 Text("\(originalText.count) → \(summaryText.count) Zeichen (\(ratioText))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -68,12 +72,21 @@ struct SummaryDiffView: View {
 
     private func column(title: String, @ViewBuilder body: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.subheadline.weight(.semibold)).padding([.horizontal, .top], 12)
+            Text(L(title))
+                .flowFont(.caption, weight: .semibold)
+                .foregroundStyle(.tint)
+                .textCase(.uppercase)
+                .tracking(1)
+                .padding([.horizontal, .top], 22)
             ScrollView {
                 body()
-                    .padding(12)
+                    .font(.system(size: 14, design: .serif))
+                    .lineSpacing(5)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollIndicators(.never)
         }
         .frame(minWidth: 320)
     }

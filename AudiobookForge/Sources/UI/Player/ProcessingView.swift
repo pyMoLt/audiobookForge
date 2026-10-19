@@ -3,6 +3,7 @@ import SwiftUI
 struct ProcessingView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PipelineController.self) private var pipelineController
+    @Environment(\.colorScheme) private var colorScheme
     let bookID: UUID
 
     private var book: BookProject? { libraryStore.book(id: bookID) }
@@ -10,85 +11,130 @@ struct ProcessingView: View {
     var body: some View {
         if let book {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(book.title).font(.title2.weight(.semibold))
-                            HStack(spacing: 8) {
-                                if let stage = book.currentStage {
-                                    StageBadge(stage: stage)
-                                }
-                                if book.status == .paused {
-                                    Text("Pausiert")
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(Color.orange.opacity(0.15), in: Capsule())
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                        }
-                        Spacer()
-                        if book.status == .paused || book.status == .failed {
-                            Button {
-                                pipelineController.resumeProcessing(bookID: bookID)
-                            } label: {
-                                Label("Fortsetzen", systemImage: "play.fill")
-                            }
-                            .buttonStyle(.borderedProminent)
-                        } else if pipelineController.isRunning(bookID) {
-                            Button {
-                                pipelineController.pauseProcessing(bookID: bookID)
-                            } label: {
-                                Label("Pausieren", systemImage: "pause.fill")
-                            }
-                        }
-                        Button("Abbrechen", role: .destructive) {
-                            pipelineController.cancelProcessing(bookID: bookID)
-                        }
-                    }
-                    .padding(16)
-                    .glassPanel()
+                VStack(alignment: .leading, spacing: 28) {
+                    workshopHeader(book)
 
                     if let error = book.lastErrorMessage, book.status == .paused || book.status == .failed {
-                        HStack(spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.orange)
                                 .font(.title3)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 3) {
                                 Text("Unterbrochen")
-                                    .font(.subheadline.weight(.semibold))
+                                    .flowFont(.headline)
+                                    .foregroundStyle(Color.orange)
                                 Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .flowFont(.callout)
+                                    .foregroundStyle(.primary)
                             }
                             Spacer()
                         }
-                        .padding(14)
-                        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        .padding(16)
+                        .background(Color.orange.opacity(colorScheme == .dark ? 0.22 : 0.10), in: RoundedRectangle(cornerRadius: Theme.Radius.row, style: .continuous))
                     }
 
                     if let progress = pipelineController.progress[bookID] {
                         RunProgressPanel(progress: progress)
                     }
 
-                    ChapterTimelineView(chapters: book.chapters)
-                        .padding(12)
-                        .glassPanel()
-
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(book.sortedChapters.enumerated()), id: \.element.id) { index, chapter in
-                            ChapterProgressRow(index: index, chapter: chapter)
-                            if index < book.chapters.count - 1 { Divider() }
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Inhalt")
+                                .font(.system(size: 24, weight: .semibold, design: .serif))
+                            let ready = book.chapters.filter { $0.audioStatus == .ready }.count
+                            Text("\(ready) von \(book.chapters.count) Kapiteln eingesprochen")
+                                .flowFont(.callout)
+                                .foregroundStyle(.secondary)
                         }
+                        ChapterTimelineView(chapters: book.chapters)
+                            .padding(14)
+                            .flowSurface(cornerRadius: Theme.Radius.card)
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(book.sortedChapters.enumerated()), id: \.element.id) { index, chapter in
+                                ChapterProgressRow(index: index, chapter: chapter)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .flowSurface(cornerRadius: Theme.Radius.card)
                     }
-                    .glassPanel()
                 }
-                .padding(24)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 26)
+                .frame(maxWidth: 980, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
+            .scrollEdgeEffectHidden(true, for: .top)
+        .scrollIndicators(.never)
             .navigationTitle(book.title)
         } else {
-            ContentUnavailableView("Buch nicht gefunden", systemImage: "questionmark.folder")
+            EmptyStateCard(systemImage: "questionmark.folder", title: "Buch nicht gefunden")
+        }
+    }
+
+    /// The book being made: its cover fills up like fresh ink.
+    private func workshopHeader(_ book: BookProject) -> some View {
+        let fraction = pipelineController.progress[bookID]?.overallFraction ?? 0
+        let isRunning = pipelineController.isRunning(bookID)
+        return HStack(alignment: .center, spacing: 26) {
+            ZStack(alignment: .bottom) {
+                BookCoverView(book: book, width: 130)
+                    .saturation(0.25 + 0.75 * fraction)
+                // Ink rising.
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(LinearGradient(colors: [Color.accentColor.opacity(0), Color.white.opacity(0.35)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 130, height: (130 / 0.72) * (1 - fraction))
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: 130, height: 130 / 0.72)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(alignment: .bottomTrailing) {
+                ProgressRing(fraction: fraction, lineWidth: 4)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(.regularMaterial))
+                    .offset(x: 14, y: 14)
+            }
+            .animation(.easeInOut(duration: 0.6), value: fraction)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(book.status == .paused ? "In der Werkstatt · pausiert" : (isRunning ? "In der Werkstatt" : "Wird vorbereitet"))
+                    .flowFont(.caption, weight: .semibold)
+                    .foregroundStyle(book.status == .paused ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.tint))
+                    .textCase(.uppercase)
+                    .tracking(1.1)
+                Text(book.title)
+                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .lineLimit(3)
+                if !book.author.isEmpty {
+                    Text(book.author).flowFont(.title3, weight: .regular).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 10) {
+                    if book.status == .paused || book.status == .failed {
+                        Button {
+                            pipelineController.resumeProcessing(bookID: bookID)
+                        } label: {
+                            Label("Fortsetzen", systemImage: "play.fill")
+                        }
+                        .buttonStyle(FlowButtonStyle(variant: .prominent, size: .large))
+                    } else if isRunning {
+                        Button {
+                            pipelineController.pauseProcessing(bookID: bookID)
+                        } label: {
+                            Label("Pausieren", systemImage: "pause.fill")
+                        }
+                        .buttonStyle(FlowButtonStyle(variant: .secondary, size: .large))
+                    }
+                    Button(role: .destructive) {
+                        pipelineController.cancelProcessing(bookID: bookID)
+                    } label: {
+                        Label("Abbrechen", systemImage: "xmark")
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .destructive, size: .large))
+                }
+                .padding(.top, 6)
+            }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -98,23 +144,34 @@ private struct ChapterProgressRow: View {
     let chapter: Chapter
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             statusIcon
-                .frame(width: 24)
+                .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(index + 1). \(chapter.title)")
+                Text(chapter.title)
+                    .font(.system(size: 14, design: .serif))
+                    .foregroundStyle(chapter.audioStatus == .pending ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .lineLimit(2)
                 if let error = chapter.lastError {
-                    Text(error).font(.caption).foregroundStyle(.red)
+                    Text(error).flowFont(.caption).foregroundStyle(.red)
                 }
             }
-            Spacer()
+            .layoutPriority(1)
+            DottedLeader().frame(minWidth: 16)
             if let duration = chapter.audioDurationSeconds {
-                Text(formatted(duration))
-                    .font(.caption)
+                Text(ListeningTimeFormatter.clock(duration))
+                    .flowFont(.caption)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
+                    .fixedSize()
+            } else {
+                Text("\(index + 1)")
+                    .flowFont(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 18)
         .padding(.vertical, 8)
     }
 
@@ -122,20 +179,15 @@ private struct ChapterProgressRow: View {
     private var statusIcon: some View {
         switch chapter.audioStatus {
         case .pending:
-            Image(systemName: "circle.dashed").foregroundStyle(.secondary)
+            Image(systemName: "circle.dotted").foregroundStyle(.tertiary)
         case .summarizing, .synthesizing:
-            ProgressView().controlSize(.small)
+            Image(systemName: "bookmark.fill")
+                .foregroundStyle(.tint)
         case .ready:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
         case .failed:
             Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
         }
-    }
-
-    private func formatted(_ seconds: Double) -> String {
-        let minutes = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", minutes, secs)
     }
 }
 
@@ -152,8 +204,9 @@ private struct RunProgressPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(Int((progress.overallFraction * 100).rounded())) %")
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .font(.system(size: 40, weight: .semibold, design: .serif))
                         .monospacedDigit()
+                        .contentTransition(.numericText())
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         if let total = progress.estimatedTotalRemainingSeconds {
@@ -172,8 +225,7 @@ private struct RunProgressPanel: View {
                     .font(.callout)
                     .monospacedDigit()
                 }
-                ProgressView(value: progress.overallFraction)
-                    .progressViewStyle(.linear)
+                FlowProgressBar(fraction: progress.overallFraction, height: 10)
 
                 phaseStepper
 
@@ -190,12 +242,12 @@ private struct RunProgressPanel: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
-            .padding(16)
-            .glassPanel()
+            .padding(22)
+            .flowSurface(cornerRadius: Theme.Radius.card)
         }
     }
 
@@ -207,9 +259,9 @@ private struct RunProgressPanel: View {
                 let isCurrent = index == currentIndex
                 HStack(spacing: 4) {
                     Image(systemName: isDone ? "checkmark.circle.fill" : (isCurrent ? "circle.inset.filled" : "circle"))
-                        .foregroundStyle(isDone ? Color.green : (isCurrent ? Color.accentColor : Color.secondary))
-                    Text(phase.stage.displayName)
-                        .font(.caption.weight(isCurrent ? .semibold : .regular))
+                        .foregroundStyle(isDone || isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                    Text(Self.bookPhaseName(phase.stage))
+                        .flowFont(.callout, weight: isCurrent ? .semibold : .regular)
                         .foregroundStyle(isCurrent ? .primary : .secondary)
                 }
                 if index < progress.phases.count - 1 {
@@ -240,16 +292,16 @@ private struct RunProgressPanel: View {
             }
         case .synthesizing:
             VStack(alignment: .leading, spacing: 6) {
-                detailRow(
-                    title: "Kapitel \(progress.chapterIndex + 1) von \(progress.chapterCount)",
-                    value: progress.chapterTitle,
-                    fraction: progress.chapterFraction
-                )
+                ForEach(progress.sortedActiveChapters, id: \.index) { chapter in
+                    detailRow(
+                        title: "Kapitel \(chapter.index + 1)",
+                        value: workerDetail(chapter),
+                        fraction: chapter.fraction
+                    )
+                }
                 HStack(spacing: 16) {
+                    Text("Kapitel \(progress.chaptersCompleted) von \(progress.chapterCount) fertig")
                     Text("Audio: \(DurationFormatter.short(progress.producedAudioSeconds)) von ca. \(DurationFormatter.short(progress.estimatedTotalAudioSeconds))")
-                    if let planned = progress.plannedSegments {
-                        Text("Segment \(progress.segmentsDone)/\(planned)")
-                    }
                     if let rtf = progress.realTimeFactor {
                         Text(String(format: "%.1f× Echtzeit", 1 / max(rtf, 0.001)))
                     }
@@ -265,20 +317,41 @@ private struct RunProgressPanel: View {
         }
     }
 
+    /// The making of a book, in book words.
+    static func bookPhaseName(_ stage: PipelineStage) -> String {
+        switch stage {
+        case .extracting: return L("Lesen")
+        case .describingImages: return L("Bilder")
+        case .summarizing: return L("Verdichten")
+        case .synthesizing: return L("Einsprechen")
+        case .packaging: return L("Binden")
+        case .done: return L("Fertig")
+        case .failed: return L("Fehler")
+        }
+    }
+
+    private func workerDetail(_ chapter: RunProgress.ChapterProgress) -> String {
+        var parts = [chapter.title]
+        if let planned = chapter.plannedSegments {
+            parts.append("Segment \(chapter.segmentsDone)/\(planned)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private func detailRow(title: String, value: String, fraction: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(value).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(L(title)).flowFont(.body, weight: .semibold)
+                Text(value).flowFont(.body).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 if let fraction {
                     Text("\(Int((fraction * 100).rounded())) %").font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
             if let fraction {
-                ProgressView(value: min(max(fraction, 0), 1))
+                FlowProgressBar(fraction: fraction, height: 5)
             } else {
-                ProgressView().progressViewStyle(.linear)
+                ProgressView().progressViewStyle(.linear).tint(.accentColor)
             }
         }
     }

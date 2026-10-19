@@ -12,7 +12,7 @@ struct MP4ChapterPackager: ChapterPackager {
         onProgress: @escaping @Sendable (String) -> Void
     ) async throws -> URL {
         guard !chapterAudioFiles.isEmpty else { throw PackagerError.noChapterAudio }
-        guard let ffmpeg = FFmpegLocator.resolve(settings: settings) else { throw PackagerError.ffmpegNotFound }
+        guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settings) else { throw PackagerError.ffmpegNotFound }
 
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
@@ -22,12 +22,24 @@ struct MP4ChapterPackager: ChapterPackager {
         defer { try? FileManager.default.removeItem(at: workDir) }
 
         onProgress("Ermittle Kapitellängen …")
+        // Plan 7.3: mark names come from title+groupTitle ("Gruppe — Titel",
+        // shortened from 70 characters, deduplicated) — never the raw fields.
+        let markTitles = ChapterNaming.markTitles(for: ordered.map(\.chapter))
         var chapterMarks: [(title: String, startMs: Int, endMs: Int)] = []
         var cursorMs = 0
-        for item in ordered {
-            let durationSeconds = try await audioDurationSeconds(url: item.url)
+        for (index, item) in ordered.enumerated() {
+            // The chapter's known duration wins over re-measuring the file:
+            // after a restore-cut from the packaged M4B, AVAsset bookkeeping
+            // differs from the original file by a couple of AAC priming
+            // frames, which would shift every later chapter mark.
+            let durationSeconds: Double
+            if let known = item.chapter.audioDurationSeconds {
+                durationSeconds = known
+            } else {
+                durationSeconds = try await audioDurationSeconds(url: item.url)
+            }
             let durationMs = Int((durationSeconds * 1000).rounded())
-            chapterMarks.append((title: item.chapter.title, startMs: cursorMs, endMs: cursorMs + durationMs))
+            chapterMarks.append((title: markTitles[index], startMs: cursorMs, endMs: cursorMs + durationMs))
             cursorMs += durationMs
         }
 

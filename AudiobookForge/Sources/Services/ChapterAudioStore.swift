@@ -13,10 +13,18 @@ import Foundation
 enum ChapterAudioStore {
     /// Compressed chapter file for a chapter's order index, matching the
     /// book's output format (see `ChapterAudioEncoder.fileExtension`).
+    /// Pure path computation — does not create directories as a side effect.
     static func chapterFileURL(bookID: UUID, order: Int, format: OutputFormat, root: URL = AppPaths.chapterAudioRoot) -> URL {
         let directory = root.appendingPathComponent(bookID.uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("\(String(format: "%03d", order)).\(ChapterAudioEncoder.fileExtension(for: format))")
+    }
+
+    /// Prepares the book's chapter audio directory on disk when files are about to be written.
+    @discardableResult
+    static func prepareChapterAudioDirectory(bookID: UUID, root: URL = AppPaths.chapterAudioRoot) throws -> URL {
+        let directory = root.appendingPathComponent(bookID.uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
     /// Removes a book's whole chapter audio directory. Called when the user
@@ -24,6 +32,100 @@ enum ChapterAudioStore {
     /// intermediate, the finished audiobook lives in the output folder.
     static func removeChapterAudio(bookID: UUID, root: URL = AppPaths.chapterAudioRoot) {
         try? FileManager.default.removeItem(at: root.appendingPathComponent(bookID.uuidString, isDirectory: true))
+    }
+
+    /// Total size of a book's chapter audio directory (0 when absent) —
+    /// used to report the disk space freed by the post-packaging cleanup.
+    static func chapterAudioSizeBytes(bookID: UUID, root: URL = AppPaths.chapterAudioRoot) -> Int64 {
+        directorySizeBytes(root.appendingPathComponent(bookID.uuidString, isDirectory: true))
+    }
+
+    private static func directorySizeBytes(_ directory: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+
+    /// Restores every chapter's audio file from the verified packaged
+    /// single-file output (M4B/M4A) in ONE lossless ffmpeg pass (plan 5.2):
+    /// `ffmpeg -i book.m4b -f segment -segment_times t1,t2,… -c copy -map 0:a`
+    /// — one process instead of one cut per chapter. Used before a single
+    /// chapter is re-synthesized after the intermediate chapter audio was
+    /// deleted.
+    ///
+    /// Returns the book with every chapter's `audioFileURL` pointing at
+    /// the restored file (durations re-measured). Throws when the packaged
+    /// file is missing/unreadable or the segment cut doesn't produce one
+    /// file per chapter.
+    static func restoreChapterAudio(
+        fromPackagedURL packagedURL: URL,
+        book: BookProject,
+        ffmpeg: URL,
+        root: URL = AppPaths.chapterAudioRoot
+    ) async throws -> BookProject {
+        var book = book
+        let sorted = book.sortedChapters
+        guard !sorted.isEmpty,
+              FileManager.default.isReadableFile(atPath: packagedURL.path) else {
+            throw PackagerError.noChapterAudio
+        }
+
+        let bookID = book.id
+        // Segment boundaries = the chapters' cumulative start seconds
+        // (everything after the first start; a segment starts per time).
+        let boundaries = sorted.dropFirst().compactMap(\.audioStartSeconds)
+        let times = boundaries.map { String(format: "%.3f", $0) }.joined(separator: ",")
+
+        let staging = root.appendingPathComponent(bookID.uuidString, isDirectory: true)
+            .appendingPathComponent("restore-tmp", isDirectory: true)
+        try? FileManager.default.removeItem(at: staging)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+
+        let segmentPattern = staging.appendingPathComponent("%04d.m4a").path
+        try await FFmpegRunner.run(
+            executable: ffmpeg,
+            arguments: [
+                "-y", "-hide_banner", "-loglevel", "error",
+                "-i", packagedURL.path,
+                "-f", "segment",
+                "-segment_times", times,
+                "-c", "copy",
+                "-map", "0:a",
+                segmentPattern,
+            ]
+        )
+
+        let files = (try? FileManager.default.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension.lowercased() == "m4a" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        guard files.count == sorted.count else {
+            throw PackagerError.ffmpegFailed("Segment-Schnitt erzeugte \(files.count) Dateien statt \(sorted.count).")
+        }
+
+        try prepareChapterAudioDirectory(bookID: bookID, root: root)
+
+        for (index, chapter) in sorted.enumerated() {
+            let destination = chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat, root: root)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: files[index], to: destination)
+            guard let bookIndex = book.chapters.firstIndex(where: { $0.id == chapter.id }) else { continue }
+            book.chapters[bookIndex].audioFileURL = destination
+            book.chapters[bookIndex].audioStatus = .ready
+            // Keep the known duration/start offsets: fresh measurements on
+            // the cut files drift by up to two AAC frames of priming
+            // metadata (≈ 85 ms at 24 kHz), which would shift every
+            // chapter mark of the re-packaged M4B. The stored values are
+            // the ones the verified M4B was built from.
+        }
+        return book
     }
 
     /// Deletes chapter audio directories whose book no longer exists in
@@ -85,7 +187,7 @@ enum ChapterAudioStore {
     /// Compressed-domain re-encode of an existing audio file (no loudness
     /// pass — legacy WAVs were already normalized by the old pipeline).
     private static func transcode(source: URL, destination: URL, settings: AppSettings) async throws {
-        guard let ffmpeg = FFmpegLocator.resolve(settings: settings) else { throw PackagerError.ffmpegNotFound }
+        guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settings) else { throw PackagerError.ffmpegNotFound }
         var arguments = ["-y", "-hide_banner", "-loglevel", "error", "-i", source.path]
         switch destination.pathExtension.lowercased() {
         case "m4a":

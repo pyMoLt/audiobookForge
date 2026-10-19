@@ -6,61 +6,73 @@ struct ImageSettingsTabView: View {
     @Environment(SettingsStore.self) private var settingsStore
 
     var body: some View {
-        @Bindable var settingsStore = settingsStore
-        Form {
-            Section("Abbildungen") {
-                Picker("Standard für neue Bücher", selection: $settingsStore.settings.describeImagesWithVisionModel) {
-                    Text("Beschreiben (Vision-Modell)").tag(true)
-                    Text("Verwerfen").tag(false)
+        @Bindable var store = settingsStore
+        VStack(alignment: .leading, spacing: 30) {
+            PillSection("Abbildungen", footer: "Jede Beschreibung wird als eigener Absatz genau an der Stelle des Bildes eingefügt — nie mitten im Satz. Pro Buch in der Prüfung umschaltbar; Beschreibungen werden gespeichert und wiederverwendet.") {
+                PillRow(title: "Standard für neue Bücher") {
+                    SegmentedPills(selection: $store.settings.describeImagesWithVisionModel, options: [
+                        PillOption(value: true, label: "Beschreiben", systemImage: "eye"),
+                        PillOption(value: false, label: "Verwerfen", systemImage: "eye.slash"),
+                    ])
                 }
-                .pickerStyle(.segmented)
-                Picker("Beschreibungen verwenden in", selection: $settingsStore.settings.imageDescriptionScope) {
-                    ForEach(ImageDescriptionScope.allCases) { Text($0.displayName).tag($0) }
+                PillRow(title: "Beschreibungen verwenden in") {
+                    PillPicker(selection: $store.settings.imageDescriptionScope,
+                               options: ImageDescriptionScope.allCases.map { PillOption(value: $0, label: $0.displayName) })
                 }
-                TextField("Einleitungswort (leer = automatisch: „Abbildung“ / „Figure“)", text: $settingsStore.settings.imageDescriptionLabel)
-                    .textFieldStyle(.roundedBorder)
-                Text("Beim Vorlesen wird jede Beschreibung als eigener Absatz genau an der Stelle des Bildes eingefügt — bei einer Bildunterschrift direkt danach, sonst am nächsten Absatzende, nie mitten im Satz. Im Zusammenfassungsmodus bekommt das Modell eine kürzere Beschreibung als Absatz an der Bildstelle und entscheidet selbst, ob es sie verwendet. Pro Buch im Prüfbildschirm umschaltbar. Beschreibungen werden gespeichert und bei einem erneuten Lauf wiederverwendet.")
-                    .font(.caption).foregroundStyle(.secondary)
+                PillRow(title: "Einleitungswort", subtitle: "Leer = automatisch „Abbildung“ / „Figure“.") {
+                    TextField("Abbildung", text: $store.settings.imageDescriptionLabel)
+                        .textFieldStyle(.flow)
+                        .frame(width: 200)
+                }
             }
 
-            Section("Welche Bilder ans Modell gehen") {
-                Stepper(value: $settingsStore.settings.minimumImageDimensionForVisionPass, in: 0...1000, step: 20) {
-                    Text("Mindestgröße: \(settingsStore.settings.minimumImageDimensionForVisionPass) px (kürzere Seite)")
+            PillSection("Welche Bilder ans Modell gehen", footer: "Ein Bild muss alle Grenzen erfüllen; Logos, Icons und Zierlinien fallen so heraus. Wiederkehrende Bilder (Wasserzeichen) werden immer verworfen; dekorative Bilder beantwortet das Modell mit „SKIP“.") {
+                PillRow(title: "Mindestgröße", subtitle: "Kürzere Bildseite") {
+                    PillStepper(value: $store.settings.minimumImageDimensionForVisionPass, range: 0...1000, step: 20, suffix: "px")
                 }
-                Stepper(value: $settingsStore.settings.minimumImageAreaPercent, in: 0...30, step: 0.5) {
-                    Text("Mindestfläche: \(settingsStore.settings.minimumImageAreaPercent, specifier: "%.1f") % der Seite")
+                PillRow(title: "Mindestfläche", subtitle: "Anteil an der Seite") {
+                    PillSlider(value: $store.settings.minimumImageAreaPercent, range: 0...30, step: 0.5, format: "%.1f %%")
                 }
-                Stepper(value: $settingsStore.settings.minimumImageKilobytes, in: 0...500, step: 2) {
-                    Text("Mindest-Dateigröße: \(settingsStore.settings.minimumImageKilobytes) KB")
+                PillRow(title: "Mindest-Dateigröße") {
+                    PillStepper(value: $store.settings.minimumImageKilobytes, range: 0...500, step: 2, suffix: "KB")
                 }
-                Stepper(value: $settingsStore.settings.maximumImageAspectRatio, in: 2...20, step: 0.5) {
-                    Text("Maximales Seitenverhältnis: \(settingsStore.settings.maximumImageAspectRatio, specifier: "%.1f") : 1")
+                PillRow(title: "Maximales Seitenverhältnis") {
+                    PillSlider(value: $store.settings.maximumImageAspectRatio, range: 2...20, step: 0.5, format: "%.1f : 1")
                 }
-                Toggle("Gezeichnete Grafiken, Schemata und Tabellen als Abbildung erkennen", isOn: $settingsStore.settings.detectVectorFigures)
-                Text("Ein Bild muss alle Grenzen erfüllen; Logos, Icons, Pfeile, Aufzählungszeichen und Zierlinien fallen so heraus. Bilder an derselben Stelle auf vielen Seiten (Logos, Wasserzeichen) werden immer verworfen. Zusätzlich antwortet das Modell bei rein dekorativen Bildern mit „SKIP“.")
-                    .font(.caption).foregroundStyle(.secondary)
+                PillRow(title: "Grafiken, Schemata und Tabellen erkennen", subtitle: "Gezeichnete Abbildungen zählen als Bild.") {
+                    PillToggle(isOn: $store.settings.detectVectorFigures)
+                }
             }
 
-            Section("Vision-Modell") {
-                Stepper("Parallele Bildbeschreibungen: \(settingsStore.settings.visionParallelRequests)", value: $settingsStore.settings.visionParallelRequests, in: 1...8)
-                Picker("Thinking für Bildbeschreibung", selection: $settingsStore.settings.llmVisionThinkingMode) {
-                    ForEach(LLMThinkingMode.allCases) { Text($0.displayName).tag($0) }
+            PillSection("Vision-Modell", footer: "Braucht ein Modell mit Bildverständnis (z. B. Qwen3.5/3.6 als VLM in oMLX). Mehr parallele Beschreibungen nutzen Continuous Batching.") {
+                PillRow(title: "Parallele Bildbeschreibungen") {
+                    PillStepper(value: $store.settings.visionParallelRequests, range: 1...8)
                 }
-                TextField("Vision-Modell-ID (leer = Zusammenfassungsmodell)", text: $settingsStore.settings.llmVisionModelOverride)
-                    .textFieldStyle(.roundedBorder)
-                Stepper("Timeout pro Bild: \(Int(settingsStore.settings.llmVisionTimeoutSeconds)) s", value: $settingsStore.settings.llmVisionTimeoutSeconds, in: 10...600, step: 10)
-                Text("Braucht ein Modell mit Bildverständnis (z. B. Qwen3.5/3.6 als VLM in oMLX). 1 = Bilder strikt nacheinander; mehr = oMLX verarbeitet mehrere gleichzeitig (Continuous Batching).")
-                    .font(.caption).foregroundStyle(.secondary)
+                PillRow(title: "Thinking für Bildbeschreibung") {
+                    SegmentedPills(selection: $store.settings.llmVisionThinkingMode,
+                                   options: LLMThinkingMode.allCases.map { PillOption(value: $0, label: $0.displayName) }, size: .small)
+                }
+                PillRow(title: "Vision-Modell-ID", subtitle: "Leer = Zusammenfassungsmodell") {
+                    TextField("Modell-ID", text: $store.settings.llmVisionModelOverride)
+                        .textFieldStyle(.flow)
+                        .frame(width: 260)
+                }
+                PillRow(title: "Timeout pro Bild") {
+                    PillSlider(value: $store.settings.llmVisionTimeoutSeconds, range: 10...600, step: 10, format: "%.0f s")
+                }
             }
 
-            Section("Lehrbücher & Skripte: Text-Bereinigung") {
-                Toggle("Beschriftungen in Abbildungen nicht vorlesen (z. B. „rER“, „N*“, „a b“)", isOn: $settingsStore.settings.removeFigureLabelText)
-                Toggle("Bildunterschriften vorlesen („Abb. 6.8 …“)", isOn: $settingsStore.settings.keepFigureCaptions)
-                Toggle("Reine Verweise weglassen („(S. 403)“, „(▶ Abb. 6.8)“)", isOn: $settingsStore.settings.removeCrossReferences)
-                Text("Immer aktiv: Silbentrennung am Zeilenende wird zusammengeführt, Ligaturen aufgelöst, Kolumnentitel, Seitenzahlen und Randmarken entfernt, Inhalts- und Stichwortverzeichnisse übersprungen, Tabellen (EPUB) zeilenweise als Sätze gelesen. Beschriftungen und Bildunterschriften wirken beim nächsten Import; Verweise und Abbildungsmodus beim nächsten Verarbeitungslauf.")
-                    .font(.caption).foregroundStyle(.secondary)
+            PillSection("Lehrbücher & Skripte", footer: "Immer aktiv: Silbentrennung wird zusammengeführt, Ligaturen aufgelöst, Kolumnentitel und Seitenzahlen entfernt, Verzeichnisse übersprungen, Tabellen (EPUB) zeilenweise gelesen.") {
+                PillRow(title: "Beschriftungen in Abbildungen nicht vorlesen", subtitle: "z. B. „rER“, „N*“, „a b“") {
+                    PillToggle(isOn: $store.settings.removeFigureLabelText)
+                }
+                PillRow(title: "Bildunterschriften vorlesen", subtitle: "„Abb. 6.8 …“") {
+                    PillToggle(isOn: $store.settings.keepFigureCaptions)
+                }
+                PillRow(title: "Reine Verweise weglassen", subtitle: "„(S. 403)“, „(▶ Abb. 6.8)“") {
+                    PillToggle(isOn: $store.settings.removeCrossReferences)
+                }
             }
         }
-        .formStyle(.grouped)
     }
 }

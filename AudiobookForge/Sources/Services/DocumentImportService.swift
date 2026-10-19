@@ -40,9 +40,27 @@ enum DocumentImportService {
         }
 
         let targetSize = settings.targetChapterCharacters
-        let initialChapters = (settings.minimumChapterCharacters > 0 && targetSize > 0)
+        var initialChapters = (settings.minimumChapterCharacters > 0 && targetSize > 0)
             ? ChapterRebundler.rebundle(chapters: rawChapters, targetCharacters: targetSize)
             : rawChapters
+
+        // Document-role classification (plan 6.2): TOC/front-matter chapters
+        // get the "nicht vorlesen" suggestion in the review screen. Purely
+        // a suggestion — the user can always override it.
+        for chapterIndex in initialChapters.indices {
+            initialChapters[chapterIndex].matterKind = FrontBackMatterClassifier.classify(
+                title: initialChapters[chapterIndex].title,
+                text: initialChapters[chapterIndex].cleanedText
+            )
+            // Numbering helps the eye, not the ear (plan 6.4).
+            initialChapters[chapterIndex].title = ListNumberingFilter.cleanedTitle(initialChapters[chapterIndex].title)
+        }
+
+        // Sentence-boundary repair across chapter splits (plan 6.5):
+        // fragments that begin mid-sentence move back to their
+        // predecessor. The geometric root cause (outline target matching
+        // in PDFExtractor) is documented separately.
+        initialChapters = ChapterBoundaryRepair.repairBoundaries(chapters: initialChapters)
 
         let detectedLanguage = LanguageDetector.detectLanguageCode(chapterTexts: extracted.chapters.map(\.text))
         let suggestion = LanguageDetector.suggestEngineAndVoice(languageCode: detectedLanguage, settings: settings)

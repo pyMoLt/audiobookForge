@@ -158,13 +158,32 @@ struct PDFExtractor: DocumentExtractor {
             title = geometricTitle
         }
 
+        // Plain PDFs (one font size): the topmost block, if it reads like a
+        // heading. The joined page text merges it with the first paragraph,
+        // so the text fallback below can't see it on its own.
+        // (Unfiltered blocks: the cleaned list drops a heading at the very
+        // top of the page as a running header.)
+        if title.isEmpty, let page = document.page(at: 0),
+           let top = PDFColumnTextExtractor.orderedLines(on: page).max(by: { $0.bounds.midY < $1.bounds.midY }) {
+            let text = top.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.count >= 3, text.count <= 100, Self.looksLikeTitle(text), !text.hasSuffix("."),
+               !PDFFrontMatterFilter.isBoilerplate(text) {
+                title = text
+            }
+        }
+
         if title.isEmpty {
             let candidateLines = firstPageText
                 .components(separatedBy: "\n")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
-            if let firstSubstantialLine = candidateLines.first(where: { $0.count > 8 && $0.count < 150 }) {
-                title = firstSubstantialLine
+            // Prefer a heading-like line (short, no sentence ending) over the
+            // first long line — that was a body paragraph in plain PDFs.
+            let headingLike = candidateLines.prefix(6).first { line in
+                line.count >= 3 && line.count <= 100 && !line.hasSuffix(".") && !line.hasSuffix(",") && !line.hasSuffix(";")
+            }
+            if let line = headingLike ?? candidateLines.first(where: { $0.count > 8 && $0.count < 150 }) {
+                title = line
             }
         }
 
@@ -175,6 +194,11 @@ struct PDFExtractor: DocumentExtractor {
         return (title, author)
     }
 
+    static func looksLikeTitle(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count <= 160 && !(trimmed.count > 60 && (trimmed.hasSuffix(".") || trimmed.hasSuffix(",")))
+    }
+
     /// PDF metadata titles are sometimes garbage (a boilerplate permission
     /// notice, a LaTeX temp filename, "Untitled") rather than the real
     /// title — reject the obviously-wrong ones so a better heuristic gets a
@@ -183,7 +207,9 @@ struct PDFExtractor: DocumentExtractor {
         guard let candidate, !candidate.isEmpty, candidate.count < 300 else { return false }
         let lowered = candidate.lowercased()
         let rejectPhrases = ["untitled", "microsoft word", "permission", "copyright", "creative commons", ".tex", ".doc"]
-        return !rejectPhrases.contains { lowered.contains($0) }
+        // A file name is not a title ("Report-final.pdf", "notes.txt").
+        let fileSuffixes = [".pdf", ".txt", ".rtf", ".md", ".html", ".odt", ".pages"]
+        return !rejectPhrases.contains { lowered.contains($0) } && !fileSuffixes.contains { lowered.hasSuffix($0) }
     }
 
     /// Finds the title by looking for the tallest normal (horizontal, not
@@ -212,8 +238,17 @@ struct PDFExtractor: DocumentExtractor {
                 && line.bounds.midX >= leftMargin && line.bounds.midX <= rightMargin
                 && line.text.trimmingCharacters(in: .whitespaces).count > 8
                 && !PDFFrontMatterFilter.isBoilerplate(line.text)
+                // "Lines" can be whole wrapped paragraphs — a title is short
+                // and doesn't read like a sentence.
+                && Self.looksLikeTitle(line.text)
         }
         guard let tallest = candidates.max(by: { $0.bounds.height < $1.bounds.height }) else { return nil }
+        // Only a line that really stands out typographically is a title: in
+        // a uniformly set page every line is "tallest", and merging same-
+        // height neighbours then returned a whole body paragraph.
+        let heights = lines.map(\.bounds.height).sorted()
+        let median = heights.isEmpty ? 0 : heights[heights.count / 2]
+        guard tallest.bounds.height > median * 1.15 else { return nil }
 
         // The title often wraps onto a second line of very similar height,
         // directly below the first — merge those together, but only lines
@@ -378,18 +413,19 @@ struct PDFExtractor: DocumentExtractor {
             return globalLines.firstIndex { $0.pageIndex > pageIndex }
         }
 
+        // Plan 6.5: Text comparison has priority over Y position. If a line
+        // matches the outline label (exact or prefix), that is the heading line.
+        if let textMatch = matchByLabelText(label, in: candidates) {
+            return textMatch
+        }
+
         // Many PDF producers write outline destinations without a real
         // point (a "Fit"/"FitH" destination rather than "XYZ"), which
         // PDFKit then reports as a huge sentinel-like value — useless for
         // Y-matching, and actively harmful: every entry on the same page
         // would resolve to the same line, silently collapsing all but the
-        // last one. When that happens, match by the bookmark's own label
-        // text instead (it's the heading's exact text, so this is normally
-        // exact and page-position independent).
+        // last one.
         if !isUsablePoint(point) {
-            if let textMatch = matchByLabelText(label, in: candidates) {
-                return textMatch
-            }
             return candidates.first?.offset
         }
 
