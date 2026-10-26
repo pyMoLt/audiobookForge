@@ -45,8 +45,11 @@ struct ImageSettingsTabView: View {
             }
 
             PillSection("Vision-Modell", footer: "Braucht ein Modell mit Bildverständnis (z. B. Qwen3.5/3.6 als VLM in oMLX). Mehr parallele Beschreibungen nutzen Continuous Batching.") {
-                PillRow(title: "Parallele Bildbeschreibungen") {
-                    PillStepper(value: $store.settings.visionParallelRequests, range: 1...8)
+                PillRow(title: "Parallele Bildbeschreibungen", subtitle: "Zusammen mit der Sprachausgabe unter „Leistung“ eingestellt.") {
+                    Button(String(format: L("%d · in Leistung ändern"), store.settings.visionParallelRequests)) {
+                        NotificationCenter.default.post(name: .openSettingsPane, object: SettingsPane.performance.rawValue)
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
                 }
                 PillRow(title: "Thinking für Bildbeschreibung") {
                     SegmentedPills(selection: $store.settings.llmVisionThinkingMode,

@@ -19,7 +19,7 @@ final class SupertonicEnvironmentManager: @unchecked Sendable {
     func install(onOutput: @escaping @Sendable (String) -> Void) async throws {
         let bridge = BridgeEnvironmentManager.shared
         guard bridge.isEnvironmentReady() else {
-            throw TTSEngineError.notReady("Kokoro-MLX-Umgebung zuerst unter Diagnose einrichten.")
+            throw TTSEngineError.notReady(L("Kokoro-MLX-Umgebung zuerst unter Einstellungen → Engines & Downloads einrichten."))
         }
         guard let script = Bundle.main.url(forResource: "setup_supertonic_mlx", withExtension: "py", subdirectory: "Bridge")
             ?? Bundle.main.url(forResource: "setup_supertonic_mlx", withExtension: "py") else {

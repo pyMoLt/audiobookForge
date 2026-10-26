@@ -123,8 +123,11 @@ struct LLMSettingsTabView: View {
             }
 
             PillSection("Durchsatz & Grenzen", footer: "oMLX verarbeitet parallele Anfragen gemeinsam (Continuous Batching); LM Studio nacheinander. Kontextlimit 0 = vom Server gemeldetes Fenster.") {
-                PillRow(title: "Parallele Anfragen") {
-                    PillStepper(value: parallelRequestsBinding, range: 1...8)
+                PillRow(title: "Parallele Anfragen", subtitle: "Zusammen mit der Sprachausgabe unter „Leistung“ eingestellt.") {
+                    Button(String(format: L("%d · in Leistung ändern"), parallelRequestsBinding.wrappedValue)) {
+                        NotificationCenter.default.post(name: .openSettingsPane, object: SettingsPane.performance.rawValue)
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
                 }
                 PillRow(title: "Kontextlimit", subtitle: "0 = automatisch") {
                     PillStepper(value: $store.settings.llmContextLimitTokens, range: 0...262_144, step: 4096, suffix: "Tokens")

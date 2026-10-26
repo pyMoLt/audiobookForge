@@ -151,9 +151,12 @@ struct BookshelfView: View {
     }
 
     private var columns: Int { max(1, Int((width + Self.upright) / (205 + Self.upright))) }
+    /// Whole art pixels (v4): fractional widths made the pixel textures of
+    /// boards, uprights and panels drift against each other while resizing.
     private var cubbyWidth: CGFloat {
         let c = CGFloat(columns)
-        return (width - Self.upright * (c + 1)) / c
+        let raw = (width - Self.upright * (c + 1)) / c
+        return max(PixelShelf.unit, (raw / PixelShelf.unit).rounded(.down) * PixelShelf.unit)
     }
 
     /// Splits overfull compartments across cubbies, adds the "new book"
@@ -349,7 +352,7 @@ struct BookshelfView: View {
                 if books.count < 5 { PixelSprite(name: "shelf_bookend").padding(.leading, PixelShelf.unit) }
                 // Objects placed beside the books (while there is room).
                 ForEach(placement.inBooks[id] ?? []) { item in
-                    decorItem(item).padding(.leading, PixelShelf.unit * 2)
+                    decorItem(item, scale: placement.scale(of: item)).padding(.leading, PixelShelf.unit * 2)
                 }
             }
             .padding(.horizontal, PixelShelf.unit * 3)
@@ -379,9 +382,11 @@ struct BookshelfView: View {
             ZStack(alignment: .bottom) {
                 Color.clear.contentShape(Rectangle())
                 HStack(alignment: .bottom, spacing: PixelShelf.unit * 3) {
-                    ForEach(placement.inEmpty[n] ?? []) { item in decorItem(item) }
+                    ForEach(placement.inEmpty[n] ?? []) { item in decorItem(item, scale: placement.scale(of: item)) }
                 }
             }
+            // Safety net: nothing ever reaches over the uprights.
+            .clipped()
             .dropDestination(for: String.self) { items, _ in
                 guard let item = items.first else { return false }
                 if item.hasPrefix("abf-decor:") {
@@ -404,8 +409,8 @@ struct BookshelfView: View {
 
     private var decor: ShelfDecor { ShelfDecor.shared }
 
-    private func decorItem(_ item: ShelfDecor.Item) -> some View {
-        PixelSprite(name: item.sprite)
+    private func decorItem(_ item: ShelfDecor.Item, scale: CGFloat = 1) -> some View {
+        PixelSprite(name: item.sprite, scale: scale)
             .modifier(CatNudgeWobble(id: item.id))
             .draggable("abf-decor:\(item.id)")
             .help("Verschieben: in ein anderes Fach ziehen")
@@ -430,6 +435,16 @@ struct BookshelfView: View {
     struct DecorPlacement {
         var inBooks: [String: [ShelfDecor.Item]] = [:]
         var inEmpty: [Int: [ShelfDecor.Item]] = [:]
+        /// Per item: 1, 0.75 or 0.5 — objects shrink in a narrow window
+        /// instead of moving elsewhere or reaching over the uprights.
+        var scales: [String: CGFloat] = [:]
+        func scale(of item: ShelfDecor.Item) -> CGFloat { scales[item.id] ?? 1 }
+    }
+
+    static let decorScaleSteps: [CGFloat] = [1, 0.75, 0.5]
+
+    private static func spriteWidth(_ item: ShelfDecor.Item) -> CGFloat {
+        CGFloat(PixelSceneSupport.image(item.sprite)?.width ?? 20) * PixelShelf.unit
     }
 
     /// Where every object shows this time. Books win: an object placed beside
@@ -449,10 +464,14 @@ struct BookshelfView: View {
         }
         for item in decor.items {
             if let target = item.cubby {
-                let width = CGFloat(PixelSceneSupport.image(item.sprite)?.width ?? 20) * u + 2 * u
-                if let free = freeWidth[target], free >= width {
+                // Stay beside the books, shrinking if needed; only when even
+                // half size doesn't fit does the object show elsewhere.
+                let full = Self.spriteWidth(item)
+                if let free = freeWidth[target],
+                   let step = Self.decorScaleSteps.first(where: { full * $0 + 2 * u <= free }) {
                     placement.inBooks[target, default: []].append(item)
-                    freeWidth[target] = free - width
+                    placement.scales[item.id] = step
+                    freeWidth[target] = free - full * step - 2 * u
                 } else {
                     overflow.append(item)
                 }
@@ -464,6 +483,13 @@ struct BookshelfView: View {
         for item in overflow {
             while (placement.inEmpty[slot]?.count ?? 0) >= ShelfDecor.perSlot { slot += 1 }
             placement.inEmpty[slot, default: []].append(item)
+        }
+        // Empty compartments: the group shrinks together to fit the width.
+        let available = cubbyWidth - 6 * u
+        for (n, items) in placement.inEmpty {
+            let total = items.map(Self.spriteWidth).reduce(0, +) + CGFloat(max(0, items.count - 1)) * 3 * u
+            let step = Self.decorScaleSteps.first { total * $0 <= available } ?? Self.decorScaleSteps.last!
+            for item in placement.inEmpty[n] ?? [] where step < 1 { placement.scales[item.id] = step }
         }
         return placement
     }
@@ -515,12 +541,12 @@ struct BookshelfView: View {
                 }
                 if books.count < 5 { x += 11 * u }
                 for item in placement.inBooks[id] ?? [] {
-                    x += 2 * u + CGFloat(PixelSceneSupport.image(item.sprite)?.width ?? 20) * u
+                    x += 2 * u + Self.spriteWidth(item) * placement.scale(of: item)
                     targets.append(.init(id: item.id, stand: CGPoint(x: x + 9 * u, y: floorY(r))))
                 }
             case .empty(let n):
                 let items = placement.inEmpty[n] ?? []
-                let widths = items.map { CGFloat(PixelSceneSupport.image($0.sprite)?.width ?? 20) * u }
+                let widths = items.map { Self.spriteWidth($0) * placement.scale(of: $0) }
                 var ix = left(c) + (cubbyWidth - widths.reduce(0, +) - CGFloat(max(0, items.count - 1)) * 3 * u) / 2
                 for (item, w) in zip(items, widths) {
                     ix += w
@@ -941,13 +967,16 @@ struct PixelPanel: View {
 /// A generated pixel sprite (Resources/Scenes/shelf_*.png) at art scale.
 struct PixelSprite: View {
     let name: String
+    /// Shrinks the object to fit a narrow compartment (v4: 1, ¾ or ½ so
+    /// the pixels stay even).
+    var scale: CGFloat = 1
 
     var body: some View {
         if let image = PixelSceneSupport.image(name) {
             Image(decorative: image, scale: 1)
                 .interpolation(.none)
                 .resizable()
-                .frame(width: CGFloat(image.width) * PixelShelf.unit, height: CGFloat(image.height) * PixelShelf.unit)
+                .frame(width: CGFloat(image.width) * PixelShelf.unit * scale, height: CGFloat(image.height) * PixelShelf.unit * scale)
         }
     }
 }
@@ -1025,6 +1054,11 @@ struct BookSpine: View {
             if let onRename {
                 Button("Hörbuch umbenennen …", systemImage: "pencil") {
                     onRename(book)
+                }
+            }
+            if book.status == .completed {
+                Button("Neu vertonen …", systemImage: "waveform.badge.mic") {
+                    NotificationCenter.default.post(name: .openRevoice, object: book.id)
                 }
             }
             if let onDelete {

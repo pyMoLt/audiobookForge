@@ -17,6 +17,13 @@ struct KokoroEngine: TTSEngine {
 
     static let standardVoices: [TTSVoiceOption] = [
         TTSVoiceOption(id: "af_heart", displayName: "Heart (US, weiblich)"),
+        // v4: French, Spanish, Italian (espeak-ng G2P via espeakng-loader).
+        TTSVoiceOption(id: "ff_siwis", displayName: "Siwis (FR, weiblich)"),
+        TTSVoiceOption(id: "ef_dora", displayName: "Dora (ES, weiblich)"),
+        TTSVoiceOption(id: "em_alex", displayName: "Alex (ES, männlich)"),
+        TTSVoiceOption(id: "em_santa", displayName: "Santa (ES, männlich)"),
+        TTSVoiceOption(id: "if_sara", displayName: "Sara (IT, weiblich)"),
+        TTSVoiceOption(id: "im_nicola", displayName: "Nicola (IT, männlich)"),
         TTSVoiceOption(id: "af_alloy", displayName: "Alloy (US, weiblich)"),
         TTSVoiceOption(id: "af_bella", displayName: "Bella (US, weiblich)"),
         TTSVoiceOption(id: "af_nicole", displayName: "Nicole (US, weiblich)"),
@@ -67,7 +74,7 @@ struct KokoroEngine: TTSEngine {
     ) async throws -> TTSSynthesisResult {
         try Task.checkCancellation()
         guard await isReady(voice: voice) else {
-            throw TTSEngineError.notReady("Kokoro-Umgebung ist nicht eingerichtet. Bitte in den Einstellungen unter Diagnose einrichten.")
+            throw TTSEngineError.notReady(L("Kokoro-Umgebung ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten."))
         }
 
         let isGerman = id == .kokoroGerman || id == .kokoroThorsten

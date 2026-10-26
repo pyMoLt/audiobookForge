@@ -185,6 +185,13 @@ struct PlayerView: View {
                 } label: {
                     Label("Hörbuch umbenennen …", systemImage: "pencil")
                 }
+                if book.status == .completed {
+                    Button {
+                        NotificationCenter.default.post(name: .openRevoice, object: book.id)
+                    } label: {
+                        Label("Neu vertonen …", systemImage: "waveform.badge.mic")
+                    }
+                }
                 if let outputURL = book.outputDirectoryURL {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([outputURL])

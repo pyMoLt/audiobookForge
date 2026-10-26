@@ -113,15 +113,55 @@ final class PipelineController {
         } else if let index = queuedBookIDs.firstIndex(of: bookID) {
             queuedBookIDs.remove(at: index)
             if var book = libraryStore.book(id: bookID) {
-                book.status = .needsReview
-                resetBookAudioState(&book)
+                if book.revoiceBackup != nil {
+                    Revoicing.restore(&book, chapterAudioRoot: chapterAudioRoot)
+                } else {
+                    book.status = .needsReview
+                    resetBookAudioState(&book)
+                }
                 libraryStore.upsert(book)
             }
         } else if var book = libraryStore.book(id: bookID), book.status == .paused || book.status == .failed {
-            book.status = .needsReview
-            resetBookAudioState(&book)
+            if book.revoiceBackup != nil {
+                Revoicing.restore(&book, chapterAudioRoot: chapterAudioRoot)
+            } else {
+                book.status = .needsReview
+                resetBookAudioState(&book)
+            }
             libraryStore.upsert(book)
         }
+    }
+
+    // MARK: - Re-voicing (v4)
+
+    /// Speaks a finished book again with another voice (summary or plain
+    /// narration). The stored text — LLM summaries, image descriptions —
+    /// is reused unless `resummarize` asks for a fresh summary. Returns
+    /// false when the book is busy.
+    @discardableResult
+    func revoice(bookID: UUID, engine: TTSEngineID, voice: String, speed: Double, resummarize: Bool = false) -> Bool {
+        guard activeBookID != bookID, !queuedBookIDs.contains(bookID), var book = libraryStore.book(id: bookID) else { return false }
+        Revoicing.prepare(&book, engine: engine, voice: voice, speed: speed, resummarize: resummarize, chapterAudioRoot: chapterAudioRoot)
+        libraryStore.upsert(book)
+        enqueue(bookID: bookID)
+        return true
+    }
+
+    /// After a run: commit a finished re-voicing, keep a paused one, put
+    /// the previous narration back for anything else.
+    private func finishRevoiceIfNeeded(bookID: UUID) {
+        guard var book = libraryStore.book(id: bookID), book.revoiceBackup != nil else { return }
+        switch book.status {
+        case .completed:
+            Revoicing.commit(&book, chapterAudioRoot: chapterAudioRoot)
+        case .paused, .processing, .queued:
+            return
+        case .failed, .needsReview:
+            let reason = book.lastErrorMessage
+            Revoicing.restore(&book, chapterAudioRoot: chapterAudioRoot)
+            book.lastErrorMessage = reason.map { L("Neu vertonen fehlgeschlagen — die bisherige Fassung bleibt erhalten:") + " " + $0 }
+        }
+        libraryStore.upsert(book)
     }
 
     private func resetBookAudioState(_ book: inout BookProject) {
@@ -153,6 +193,7 @@ final class PipelineController {
             await self?.runFullPipeline(bookID: bookID)
             await MainActor.run {
                 guard let self else { return }
+                self.finishRevoiceIfNeeded(bookID: bookID)
                 self.coalescer.drop(bookID: bookID)
                 self.progress[bookID] = nil
                 if self.activeBookID == bookID {
@@ -289,7 +330,7 @@ final class PipelineController {
     private func figureLabel(for book: BookProject) -> String {
         let custom = settingsStore.settings.imageDescriptionLabel.trimmingCharacters(in: .whitespaces)
         if !custom.isEmpty { return custom.hasSuffix(":") ? custom : custom + ":" }
-        return book.outputLanguageCode.hasPrefix("de") ? "Abbildung:" : "Figure:"
+        return PausePlanner.figureLabel(forLanguage: book.outputLanguageCode)
     }
 
     private func languageName(for book: BookProject) -> String {
@@ -807,7 +848,7 @@ final class PipelineController {
             let engine = TTSEngineFactory.engine(for: book.engineID, settings: settingsStore.settings)
             guard await engine.isReady(voice: book.voice) else {
                 book.status = .failed
-                book.lastErrorMessage = "TTS-Engine ist nicht eingerichtet. Bitte in den Einstellungen unter Diagnose einrichten."
+                book.lastErrorMessage = L("TTS-Engine ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten.")
                 libraryStore.upsert(book)
                 return
             }
@@ -862,7 +903,7 @@ final class PipelineController {
             } else {
                 // Energy profile (v3.2): adapter/battery decides how many
                 // chapters render at once.
-                let parallelWorkers = PowerProfile.current.ttsWorkers(userSetting: settings.ttsParallelWorkers)
+                let parallelWorkers = PowerProfile.current.ttsWorkers(userSetting: settings.ttsWorkers(for: book.engineID))
                 logger.log("Synthese: \(book.chapters.count) Kapitel insgesamt, \(alreadyDoneIndices.count) bereits fertig, \(pendingIndices.count) zu synthetisieren (\(parallelWorkers) parallele Worker).")
 
                 let pendingItems: [PendingSynthesisItem] = pendingIndices.map { idx in

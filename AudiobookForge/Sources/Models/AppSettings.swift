@@ -388,6 +388,26 @@ struct AppSettings: Codable, Sendable, Equatable {
     var supertonicPauseSeconds: Double = 0.4
     /// Number of chapters synthesized in parallel (1...4). 2 gives the optimal throughput on Apple Silicon.
     var ttsParallelWorkers: Int = 2
+    /// Parallel chapter workers per engine (v4), keyed by `TTSEngineID`
+    /// raw value; engines without an entry use `recommendedWorkers`.
+    var ttsWorkersByEngine: [String: Int] = [:]
+    /// Phonon (v4): "<lang>/<Name>" and tempo.
+    var phononVoice: String = "de/Henrik"
+    var phononSpeed: Double = 1.0
+    /// Pocket TTS (v4): "<lang>/<name>"; 24-layer models (slower, better).
+    var pocketVoice: String = "de/juergen"
+    var pocketHighQuality: Bool = false
+    /// Default voices for languages beyond German/English (v4: fr, es, it).
+    var defaultVoicesByLanguage: [String: VoiceID] = [:]
+
+    /// Workers the user chose for `engine` (before the energy profile caps
+    /// it). Without a per-engine entry, the engines that existed before v4
+    /// keep the former global setting; new engines start at their measured
+    /// optimum.
+    func ttsWorkers(for engine: TTSEngineID) -> Int {
+        let fallback = engine.isPreV4 ? ttsParallelWorkers : engine.recommendedWorkers
+        return max(1, min(engine.maxWorkers, ttsWorkersByEngine[engine.rawValue] ?? fallback))
+    }
 
     /// RAM Watchdog: monitors memory usage during TTS synthesis to protect macOS from system freezes.
     var ramWatchdogEnabled: Bool = true
@@ -406,6 +426,12 @@ struct AppSettings: Codable, Sendable, Equatable {
             return max(3.0, Double(workers) * 0.8 + 1.5)
         case .appleSystem:
             return 2.5
+        case .phonon:
+            // ~0.36 GB per ptts process (measured, q8, 1 thread).
+            return max(3.0, Double(workers) * 0.5 + 1.5)
+        case .pocketTTS:
+            // ~1.0 GB per process, 2.4 GB with the 24-layer models.
+            return max(4.0, Double(workers) * (pocketHighQuality ? 2.8 : 1.3) + 1.5)
         }
     }
 
@@ -446,6 +472,12 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// Deterministic per-chapter jitter (±percent) so pauses don't sound
     /// mechanical while regenerated chapters stay byte-identical.
     var pauseJitterPercent: Int = 10
+    /// v4 natural speech rhythm: pauses follow the text (longer after
+    /// "…", questions, long sentences, before dialogue; shorter after
+    /// short ones) and vary by up to ± `pauseVariationMs` around their
+    /// target. Off = fixed pauses per boundary kind (plus percent jitter).
+    var naturalPauseRhythm: Bool = true
+    var pauseVariationMs: Int = 250
 
     /// Piper "Lebendigkeit" (plan 8.5): phoneme-duration variance and
     /// pronunciation noise. Higher noise_scale = more prosodic variety.
@@ -454,7 +486,7 @@ struct AppSettings: Codable, Sendable, Equatable {
 
     /// Which cloning-capable engine renders the user's cloned voices
     /// ("clone:<id>" voice strings): OmniVoice.
-    var preferredCloneEngine: TTSEngineID = .omniVoice
+    var preferredCloneEngine: TTSEngineID = .pocketTTS
 
     /// OmniVoice (k2-fsa, MLX): iterative unmasking steps — fewer = faster,
     /// lower quality. 32 is the model default, 16 the fast lane.
@@ -543,6 +575,8 @@ struct AppSettings: Codable, Sendable, Equatable {
         case .supertonic3: return supertonicVoice
         case .omniVoice: return "default"
         case .appleSystem: return AppleSpeechEngine.automaticVoice
+        case .phonon: return phononVoice
+        case .pocketTTS: return pocketVoice
         }
     }
 
@@ -551,7 +585,7 @@ struct AppSettings: Codable, Sendable, Equatable {
     func defaultVoiceID(forLanguage code: String) -> VoiceID {
         if code.hasPrefix("de") { return defaultVoiceDE }
         if code.hasPrefix("en") { return defaultVoiceEN }
-        return VoiceCatalog.defaultVoice(forLanguage: code)
+        return defaultVoicesByLanguage[String(code.prefix(2))] ?? VoiceCatalog.defaultVoice(forLanguage: code)
     }
 
     /// Mirrors `LanguageDetector.suggestEngineAndVoice`'s old German path:
@@ -603,6 +637,8 @@ struct AppSettings: Codable, Sendable, Equatable {
         case .supertonic3: return supertonicSpeed
         case .omniVoice: return 1.0 // OmniVoice hat keinen Tempo-Parameter
         case .appleSystem: return 1.0
+        case .phonon: return phononSpeed
+        case .pocketTTS: return 1.0 // Pocket TTS hat keinen Tempo-Parameter
         }
     }
 
@@ -808,13 +844,14 @@ struct AppSettings: Codable, Sendable, Equatable {
         case piperVoice, piperSpeed, autoSelectEngineByLanguage
         case defaultVoiceDE, defaultVoiceEN
         case sentencePauseMs, paragraphPauseMs, headingPauseMs, listItemPauseMs, figurePauseMs
-        case chapterLeadInMs, chapterTailMs, pauseJitterPercent
+        case chapterLeadInMs, chapterTailMs, pauseJitterPercent, naturalPauseRhythm, pauseVariationMs
         case piperNoiseScale, piperNoiseW
         case preferredCloneEngine, omniVoiceSteps
         case appearanceMode, textSizeStep, accent, glassIntensity, motionMode, flowBackgroundEnabled, appLanguage, powerModeOnAdapter, powerModeOnBattery
         case sidebarGrouping
         case kokoroGermanVoice, kokoroGermanSpeed, kokoroThorstenSpeed
         case supertonicVoice, supertonicSpeed, supertonicSteps, supertonicChunkCharacters, supertonicPauseSeconds, ttsParallelWorkers
+        case ttsWorkersByEngine, phononVoice, phononSpeed, pocketVoice, pocketHighQuality, defaultVoicesByLanguage
         case ramWatchdogEnabled, ramWatchdogAuto, ramWatchdogManualLimitGB
         case llmBaseURL, llmAPIKey, llmModel, llmProvider
         case omlxBaseURL, omlxAPIKey, omlxModel
@@ -859,6 +896,25 @@ struct AppSettings: Codable, Sendable, Equatable {
         supertonicSteps = try container.decodeIfPresent(Int.self, forKey: .supertonicSteps) ?? d.supertonicSteps
         supertonicChunkCharacters = try container.decodeIfPresent(Int.self, forKey: .supertonicChunkCharacters) ?? d.supertonicChunkCharacters
         supertonicPauseSeconds = try container.decodeIfPresent(Double.self, forKey: .supertonicPauseSeconds) ?? d.supertonicPauseSeconds
+        // An empty map only comes from pre-release v4 builds: migrate it too.
+        if let stored = try container.decodeIfPresent([String: Int].self, forKey: .ttsWorkersByEngine), !stored.isEmpty {
+            ttsWorkersByEngine = stored
+        } else {
+            let ttsParallelWorkers = try container.decodeIfPresent(Int.self, forKey: .ttsParallelWorkers) ?? d.ttsParallelWorkers
+            // Upgrade from v3: the old "Maximal" profile ran at least two
+            // workers whatever the global setting said — keep that speed by
+            // seeding every pre-v4 engine with max(old value, optimum).
+            var seeded: [String: Int] = [:]
+            for engine in TTSEngineID.allCases where engine.isPreV4 {
+                seeded[engine.rawValue] = min(engine.maxWorkers, max(ttsParallelWorkers, engine.recommendedWorkers))
+            }
+            ttsWorkersByEngine = seeded
+        }
+        phononVoice = try container.decodeIfPresent(String.self, forKey: .phononVoice) ?? d.phononVoice
+        phononSpeed = try container.decodeIfPresent(Double.self, forKey: .phononSpeed) ?? d.phononSpeed
+        pocketVoice = try container.decodeIfPresent(String.self, forKey: .pocketVoice) ?? d.pocketVoice
+        pocketHighQuality = try container.decodeIfPresent(Bool.self, forKey: .pocketHighQuality) ?? d.pocketHighQuality
+        defaultVoicesByLanguage = try container.decodeIfPresent([String: VoiceID].self, forKey: .defaultVoicesByLanguage) ?? d.defaultVoicesByLanguage
         ttsParallelWorkers = try container.decodeIfPresent(Int.self, forKey: .ttsParallelWorkers) ?? d.ttsParallelWorkers
         ramWatchdogEnabled = try container.decodeIfPresent(Bool.self, forKey: .ramWatchdogEnabled) ?? d.ramWatchdogEnabled
         ramWatchdogAuto = try container.decodeIfPresent(Bool.self, forKey: .ramWatchdogAuto) ?? d.ramWatchdogAuto
@@ -882,6 +938,8 @@ struct AppSettings: Codable, Sendable, Equatable {
         chapterLeadInMs = try container.decodeIfPresent(Int.self, forKey: .chapterLeadInMs) ?? d.chapterLeadInMs
         chapterTailMs = try container.decodeIfPresent(Int.self, forKey: .chapterTailMs) ?? d.chapterTailMs
         pauseJitterPercent = try container.decodeIfPresent(Int.self, forKey: .pauseJitterPercent) ?? d.pauseJitterPercent
+        naturalPauseRhythm = try container.decodeIfPresent(Bool.self, forKey: .naturalPauseRhythm) ?? d.naturalPauseRhythm
+        pauseVariationMs = try container.decodeIfPresent(Int.self, forKey: .pauseVariationMs) ?? d.pauseVariationMs
         piperNoiseScale = try container.decodeIfPresent(Double.self, forKey: .piperNoiseScale) ?? d.piperNoiseScale
         piperNoiseW = try container.decodeIfPresent(Double.self, forKey: .piperNoiseW) ?? d.piperNoiseW
         // Removed engine settings (old keys in settings.json are ignored by

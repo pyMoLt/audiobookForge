@@ -33,11 +33,12 @@ struct AppleSpeechEngine: TTSEngine {
 
     // MARK: Voices
 
-    /// German and English system voices, best quality first; novelty
+    /// German, English, French, Spanish and Italian system voices (v4),
+    /// best quality first; novelty
     /// voices (Bells, Bubbles …) and Personal Voice are left out.
     static func installedVoices() -> [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("de") || $0.language.hasPrefix("en") }
+            .filter { voice in ["de", "en", "fr", "es", "it"].contains { voice.language.hasPrefix($0) } }
             .filter { !$0.voiceTraits.contains(.isNoveltyVoice) && !$0.voiceTraits.contains(.isPersonalVoice) }
             .sorted { a, b in
                 if a.quality != b.quality { return a.quality.rawValue > b.quality.rawValue }

@@ -5,7 +5,8 @@ import Foundation
 /// "Kapitel IV", "3. Introduction", or an all-caps short line on its own.
 enum ChapterHeadingHeuristic {
     private static let patterns: [String] = [
-        #"^\s*(chapter|kapitel)\s+([ivxlcdm]+|\d+|[a-z]+)\b.*$"#,
+        // v4: also French, Spanish, Italian ("Chapitre", "Capítulo", "Capitolo").
+        #"^\s*(chapter|kapitel|chapitre|cap[ií]tulo|capitolo)\s+([ivxlcdm]+|\d+|[a-zà-ú]+)\b.*$"#,
         #"^\s*(\d{1,3})[\.\)]\s+[A-ZÄÖÜ].{0,80}$"#,
     ]
 

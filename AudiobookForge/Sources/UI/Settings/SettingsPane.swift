@@ -12,6 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case images
     case appearance
     case engines
+    case performance
     case diagnostics
 
     var id: String { rawValue }
@@ -28,7 +29,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
         switch self {
         case .voices, .speech, .output: return .audiobook
         case .text, .ai, .images: return .text
-        case .appearance, .engines, .diagnostics: return .app
+        case .appearance, .engines, .performance, .diagnostics: return .app
         }
     }
 
@@ -41,7 +42,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .ai: return L("KI & Zusammenfassung")
         case .images: return L("Bilder")
         case .appearance: return L("Erscheinungsbild")
-        case .engines: return L("Engines & Leistung")
+        case .engines: return L("Engines & Downloads")
+        case .performance: return L("Leistung")
         case .diagnostics: return L("Diagnose")
         }
     }
@@ -56,20 +58,22 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .images: return "photo.on.rectangle"
         case .appearance: return "paintpalette"
         case .engines: return "cpu"
+        case .performance: return "gauge.with.dots.needle.67percent"
         case .diagnostics: return "stethoscope"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .voices: return L("Standardstimmen für Deutsch und Englisch, Galerie und eigene Stimmen")
+        case .voices: return L("Standardstimmen je Sprache, Galerie und eigene Stimmen")
         case .speech: return L("Pausen, Tempo und Klang der Sprach-Engines")
         case .output: return L("Format, Zielordner, Qualität und Lautheit")
         case .text: return L("Kopf-/Fußzeilen, Fußnoten, Kapitelgrößen und Dokumenttypen")
         case .ai: return L("Lokales Sprachmodell, Gliederung, Zusammenfassung und Vorlagen")
         case .images: return L("Bildbeschreibungen mit dem Vision-Modell")
         case .appearance: return L("Hell oder dunkel, Textgröße, Akzentfarbe, Glas und Bewegung")
-        case .engines: return L("Fallback-Engine, Modelle, Downloads und parallele Worker")
+        case .engines: return L("Hugging-Face-Konto, Laufzeiten, Sprachmodelle und Stimmen je Engine")
+        case .performance: return L("Energiemodi, Parallelität je Engine, KI- und Bildanfragen, Speicherschutz")
         case .diagnostics: return L("Umgebung, Abhängigkeiten und Protokolle")
         }
     }
@@ -85,7 +89,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .ai: return "ki llm sprachmodell omlx lm studio endpoint server verbindung timeout antwort modell zusammenfassung prompt vorlagen kontext"
         case .images: return "bild bilder abbildung vision beschreibung grafik diagramm"
         case .appearance: return "erscheinungsbild hell dunkel textgröße schrift akzent farbe glas bewegung hintergrund sidebar gruppierung"
-        case .engines: return "engine engines modell download worker parallel fallback kokoro piper supertonic qwen omnivoice leistung"
+        case .engines: return "engine engines modell modelle download herunterladen hugging face token lizenz laufzeit fallback kokoro piper supertonic omnivoice phonon pocket"
+        case .performance: return "leistung energie akku netzteil batterie worker parallel parallelität gleichzeitig ki anfragen bild ram speicher watchdog schnell"
         case .diagnostics: return "diagnose umgebung ffmpeg bridge python abhängigkeiten log protokoll pfad"
         }
     }
@@ -100,7 +105,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .ai: return "ai llm model server connection timeout summary prompt templates context thinking"
         case .images: return "image images figure vision description diagram"
         case .appearance: return "appearance light dark text size accent color glass motion background language"
-        case .engines: return "engine engines model download worker parallel fallback performance"
+        case .engines: return "engine engines model models download hugging face token license runtime fallback phonon pocket"
+        case .performance: return "performance energy battery adapter worker parallel concurrency requests memory ram watchdog speed"
         case .diagnostics: return "diagnostics environment dependencies log path setup"
         }
     }

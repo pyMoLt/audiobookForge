@@ -4,7 +4,7 @@ import AppKit
 /// First-launch setup (v3.1): everything the app needs is set up from here —
 /// no Terminal. Language → requirements → Kokoro (+ German voices) → first
 /// voices → optional local AI → done. Further engines and voices can be
-/// downloaded later under Settings → Engines & Leistung.
+/// downloaded later under Settings → Engines & Downloads.
 ///
 /// Shown automatically while Kokoro isn't set up; reopenable from the
 /// Diagnose settings page.
@@ -470,7 +470,7 @@ struct SetupAssistantView: View {
                 .foregroundStyle(.tint)
             Text("Dein Regal ist bereit.")
                 .font(.system(size: 28, weight: .semibold, design: .serif))
-            Text("Zieh ein PDF oder EPUB ins Fenster. Weitere Stimmen und Engines (Piper, Supertonic, eigene Stimmen) lädst du jederzeit unter Einstellungen → Engines & Leistung.")
+            Text("Zieh ein PDF oder EPUB ins Fenster. Weitere Stimmen und Engines (Phonon, Pocket TTS, Piper, Supertonic, eigene Stimmen) lädst du jederzeit unter Einstellungen → Engines & Downloads.")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

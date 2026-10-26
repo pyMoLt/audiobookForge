@@ -97,6 +97,10 @@ enum TTSEngineFactory {
             return OmniVoiceEngine(settings: settings, environment: OmniVoiceEnvironmentManager.shared)
         case .appleSystem:
             return AppleSpeechEngine(settings: settings)
+        case .phonon:
+            return PhononEngine(settings: settings, environment: PhononEnvironmentManager.shared)
+        case .pocketTTS:
+            return PocketEngine(settings: settings, environment: PocketEnvironmentManager.shared)
         }
     }
 

@@ -15,14 +15,15 @@ struct SettingsView: View {
     /// Every settings field appears in exactly one area (plan 9.3 —
     /// nothing is lost; the mirror test walks this mapping).
     static let settingsBuckets: [(name: String, fields: [String])] = [
-        ("Stimmen", ["defaultVoiceDE", "defaultVoiceEN", "preferredCloneEngine", "voicePreviewSentenceCount", "voicePreviewMaxCharacters", "autoSelectEngineByLanguage"]),
-        ("Sprechfluss", ["sentencePauseMs", "paragraphPauseMs", "headingPauseMs", "listItemPauseMs", "figurePauseMs", "chapterLeadInMs", "chapterTailMs", "pauseJitterPercent", "kokoroSpeed", "kokoroGermanSpeed", "kokoroThorstenSpeed", "piperSpeed", "piperNoiseScale", "piperNoiseW", "supertonicSpeed", "supertonicPauseSeconds"]),
+        ("Stimmen", ["defaultVoiceDE", "defaultVoiceEN", "defaultVoicesByLanguage", "preferredCloneEngine", "voicePreviewSentenceCount", "voicePreviewMaxCharacters", "autoSelectEngineByLanguage"]),
+        ("Sprechfluss", ["sentencePauseMs", "paragraphPauseMs", "headingPauseMs", "listItemPauseMs", "figurePauseMs", "chapterLeadInMs", "chapterTailMs", "pauseJitterPercent", "naturalPauseRhythm", "pauseVariationMs", "kokoroSpeed", "kokoroGermanSpeed", "kokoroThorstenSpeed", "piperSpeed", "piperNoiseScale", "piperNoiseW", "supertonicSpeed", "supertonicPauseSeconds", "phononSpeed"]),
         ("Ausgabe", ["defaultOutputFormat", "outputBaseFolderPath", "outputFolderTemplate", "mp3Quality", "aacBitrateKbps", "chapterAudioBitrateKbps", "loudnessNormalizationEnabled", "loudnessTargetLUFS", "loudnessTruePeakDB", "loudnessRangeLU", "keepChapterAudioAfterPackaging"]),
         ("Textaufbereitung", ["stripRecurringHeadersFooters", "includeFootnotes", "minimumChapterCharacters", "targetChapterCharacters", "excludeBackMatterSections", "defaultDocumentType", "bookTuning", "paperTuning", "reportTuning", "autoSplitEnabled", "autoSplitTargetCharacters", "boxLabelHandling", "speakHeadingNumbers"]),
-        ("KI & Zusammenfassung", ["llmProvider", "llmBaseURL", "llmAPIKey", "llmModel", "omlxBaseURL", "omlxAPIKey", "omlxModel", "omlxGeneration", "lmStudioGeneration", "omlxParallelRequests", "lmStudioParallelRequests", "llmContextLimitTokens", "llmRequestTimeoutSeconds", "llmConnectionTimeoutSeconds", "correctImplausibleServerPresets", "autoStartOMLX", "autoUnloadOMLXAfterPass", "promptTemplates", "summarizationChunkCharacterBudget", "aiChapterMaxCharacters", "minAIChapterCharacters", "aiChapterContinuityEnabled", "summarizationBatchTolerance"]),
-        ("Bilder", ["llmVisionTimeoutSeconds", "llmVisionThinkingMode", "llmVisionModelOverride", "describeImagesWithVisionModel", "minimumImageDimensionForVisionPass", "imageDescriptionScope", "minimumImageAreaPercent", "minimumImageKilobytes", "maximumImageAspectRatio", "detectVectorFigures", "removeFigureLabelText", "keepFigureCaptions", "removeCrossReferences", "visionParallelRequests", "imageDescriptionLabel"]),
+        ("KI & Zusammenfassung", ["llmProvider", "llmBaseURL", "llmAPIKey", "llmModel", "omlxBaseURL", "omlxAPIKey", "omlxModel", "omlxGeneration", "lmStudioGeneration", "llmContextLimitTokens", "llmRequestTimeoutSeconds", "llmConnectionTimeoutSeconds", "correctImplausibleServerPresets", "autoStartOMLX", "autoUnloadOMLXAfterPass", "promptTemplates", "summarizationChunkCharacterBudget", "aiChapterMaxCharacters", "minAIChapterCharacters", "aiChapterContinuityEnabled", "summarizationBatchTolerance"]),
+        ("Bilder", ["llmVisionTimeoutSeconds", "llmVisionThinkingMode", "llmVisionModelOverride", "describeImagesWithVisionModel", "minimumImageDimensionForVisionPass", "imageDescriptionScope", "minimumImageAreaPercent", "minimumImageKilobytes", "maximumImageAspectRatio", "detectVectorFigures", "removeFigureLabelText", "keepFigureCaptions", "removeCrossReferences", "imageDescriptionLabel"]),
         ("Erscheinungsbild", ["appearanceMode", "textSizeStep", "accent", "glassIntensity", "motionMode", "flowBackgroundEnabled", "sidebarGrouping", "appLanguage"]),
-        ("Engines & Leistung", ["ttsEngine", "ttsParallelWorkers", "powerModeOnAdapter", "powerModeOnBattery", "kokoroVoice", "kokoroModelRepo", "piperVoice", "kokoroGermanVoice", "supertonicVoice", "supertonicSteps", "supertonicChunkCharacters", "omniVoiceSteps", "ramWatchdog", "ramWatchdogEnabled", "ramWatchdogAuto", "ramWatchdogManualLimitGB", "speicher"]),
+        ("Engines & Downloads", ["ttsEngine", "phononVoice", "pocketVoice", "pocketHighQuality", "kokoroVoice", "kokoroModelRepo", "piperVoice", "kokoroGermanVoice", "supertonicVoice", "supertonicSteps", "supertonicChunkCharacters", "omniVoiceSteps"]),
+        ("Leistung", ["powerModeOnAdapter", "powerModeOnBattery", "ttsParallelWorkers", "ttsWorkersByEngine", "omlxParallelRequests", "lmStudioParallelRequests", "visionParallelRequests", "ramWatchdog", "ramWatchdogEnabled", "ramWatchdogAuto", "ramWatchdogManualLimitGB", "speicher"]),
         ("Diagnose", ["dependencyPathOverrides"]),
     ]
 
@@ -155,6 +156,7 @@ private struct SettingsPage: View {
         case .images: ImageSettingsTabView()
         case .appearance: AppearanceSettingsSection()
         case .engines: EnginesSettingsPane()
+        case .performance: PerformanceSettingsPane()
         case .diagnostics: DiagnosticsTabView()
         }
     }
@@ -245,6 +247,14 @@ private struct VoicesSettingsPane: View {
                 DefaultVoiceCard(language: "Englisch", flag: "EN", voice: $store.settings.defaultVoiceEN, languageCode: "en") {
                     galleryMode = GalleryRequest(languageCode: "en")
                 }
+                ForEach(["fr", "es", "it"], id: \.self) { code in
+                    DefaultVoiceCard(language: languageDisplayName(code), flag: code.uppercased(), voice: Binding(
+                        get: { store.settings.defaultVoiceID(forLanguage: code) },
+                        set: { store.settings.defaultVoicesByLanguage[code] = $0 }
+                    ), languageCode: code) {
+                        galleryMode = GalleryRequest(languageCode: code)
+                    }
+                }
                 PillRow(title: "Engine nach Sprache wählen", subtitle: "Erkennt die Buchsprache und nimmt die passende Standardstimme.") {
                     PillToggle(isOn: $store.settings.autoSelectEngineByLanguage)
                 }
@@ -270,8 +280,11 @@ private struct VoicesSettingsPane: View {
             }
 
             PillSection("Eigene Stimmen") {
-                PillRow(title: "Klon-Engine", subtitle: "Liest mit deiner eigenen Stimme vor — läuft vollständig lokal.") {
-                    Text(verbatim: "OmniVoice").flowFont(.callout, weight: .semibold)
+                PillRow(title: "Klon-Engine", subtitle: "Liest mit deiner eigenen Stimme vor — läuft vollständig lokal. Pocket TTS ist deutlich schneller, OmniVoice kann mehr Sprachen.") {
+                    SegmentedPills(selection: $store.settings.preferredCloneEngine, options: [
+                        PillOption(value: TTSEngineID.pocketTTS, label: "Pocket TTS", verbatim: true),
+                        PillOption(value: TTSEngineID.omniVoice, label: "OmniVoice", verbatim: true),
+                    ], size: .small)
                 }
                 PillRow(title: "Eigene Stimme anlegen", subtitle: "10–20 Sekunden ins Mikrofon sprechen oder eine Audiodatei importieren.") {
                     Button("Stimme anlegen …") { galleryMode = GalleryRequest(languageCode: nil) }
@@ -288,8 +301,8 @@ private struct VoicesSettingsPane: View {
                 }
             }
         }
-        .sheet(item: $galleryMode) { _ in
-            VoiceGalleryView(onSelect: nil, currentVoice: nil)
+        .sheet(item: $galleryMode) { request in
+            VoiceGalleryView(onSelect: nil, currentVoice: nil, languageCode: request.languageCode)
         }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
@@ -314,7 +327,9 @@ private struct DefaultVoiceCard: View {
 
     private var profile: VoiceProfile? { VoiceCatalog.profile(for: voice) }
     private var candidates: [VoiceProfile] {
-        VoiceCatalog.allProfiles.filter { $0.languageCode.hasPrefix(languageCode) }
+        // The recommended voices (plus the current one); everything else
+        // lives in the gallery.
+        VoiceCatalog.profiles(language: languageCode).filter { $0.featured || $0.id == voice }
     }
 
     var body: some View {
@@ -398,24 +413,33 @@ private struct SpeechSettingsPane: View {
         @Bindable var store = settingsStore
         VStack(alignment: .leading, spacing: 30) {
             PillSection("Pausen", footer: "Die App plant Pausen an Satz-, Absatz- und Überschriftengrenzen und legt die Stille selbst in die Audiodaten — Mitlesen und Kapitelmarken bleiben exakt.") {
-                pauseRow("Zwischen Sätzen", "0 = natürliche Pause der Engine", $store.settings.sentencePauseMs, 0...2000)
+                pauseRow("Zwischen Sätzen", "0 = natürliche Pause der Engine (im natürlichen Rhythmus mindestens 160 ms)", $store.settings.sentencePauseMs, 0...2000)
                 pauseRow("Nach Absätzen", nil, $store.settings.paragraphPauseMs, 0...2000)
                 pauseRow("Nach Überschriften", nil, $store.settings.headingPauseMs, 0...3000)
                 pauseRow("Nach Listenpunkten", nil, $store.settings.listItemPauseMs, 0...2000)
                 pauseRow("Nach Bildbeschreibungen", nil, $store.settings.figurePauseMs, 0...3000)
                 pauseRow("Kapitelanfang (Vorlauf)", nil, $store.settings.chapterLeadInMs, 0...3000)
                 pauseRow("Kapitelende (Auslauf)", nil, $store.settings.chapterTailMs, 0...5000)
+                PillRow(title: "Natürlicher Sprechrhythmus", subtitle: "Pausen folgen dem Text: länger nach „…“, Fragen, langen Sätzen und vor wörtlicher Rede, kürzer nach kurzen Sätzen.") {
+                    PillToggle(isOn: $store.settings.naturalPauseRhythm)
+                }
+                if store.settings.naturalPauseRhythm {
+                    PillRow(title: "Schwankung um den Zielwert", subtitle: "Jede Pause weicht bis zu so viel nach oben oder unten ab (zwischen Sätzen die Hälfte).") {
+                        PillStepper(value: $store.settings.pauseVariationMs, range: 0...2000, step: 50, suffix: "± ms")
+                    }
+                }
                 PillRow(title: "Menschliche Abweichung", subtitle: "Pausen schwanken leicht, damit es nicht maschinell klingt.") {
                     PillStepper(value: $store.settings.pauseJitterPercent, range: 0...50, step: 5, suffix: "%")
                 }
             }
 
             PillSection("Tempo je Engine") {
-                speedRow("Kokoro (Englisch)", $store.settings.kokoroSpeed, 0.5...2.0)
+                speedRow("Kokoro (EN, FR, ES, IT)", $store.settings.kokoroSpeed, 0.5...2.0)
                 speedRow("Kokoro Deutsch", $store.settings.kokoroGermanSpeed, 0.5...2.0)
                 speedRow("Kokoro Thorsten", $store.settings.kokoroThorstenSpeed, 0.5...2.0)
                 speedRow("Piper", $store.settings.piperSpeed, 0.5...2.0)
                 speedRow("Supertonic", $store.settings.supertonicSpeed, 0.7...2.0)
+                speedRow("Phonon", $store.settings.phononSpeed, 0.75...1.5)
             }
 
             PillSection("Klang", footer: "„Lebendigkeit“ steuert, wie stark Satzrhythmus und Aussprache variieren. Höher = ausdrucksstärker, aber weniger vorhersehbar.") {
@@ -622,9 +646,11 @@ private struct AISettingsPane: View {
     }
 }
 
-// MARK: - Engines
+// MARK: - Performance
 
-private struct EnginesSettingsPane: View {
+/// Leistung (v4): energy modes, parallelism of every engine, the LLM and
+/// the vision model side by side, and the RAM watchdog.
+private struct PerformanceSettingsPane: View {
     @Environment(SettingsStore.self) private var settingsStore
 
     var body: some View {
@@ -645,14 +671,62 @@ private struct EnginesSettingsPane: View {
                 }
             }
 
+            PillSection("Parallelität", footer: "Wie viele Kapitel je Engine gleichzeitig gesprochen werden. Startwerte aus Messungen auf Apple Silicon; der Energiemodus begrenzt sie (Ausgewogen halbiert, Stromsparend = 1). KI- und Bildanfragen laufen unabhängig davon parallel.") {
+                let mode = PowerMonitor.shared.mode(for: store.settings)
+                ForEach(TTSEngineID.allCases.filter { $0.maxWorkers > 1 }) { engine in
+                    PillRow(title: engine.shortName, subtitle: String(format: L("wirksam: %d (%@)"), mode.ttsWorkers(userSetting: store.settings.ttsWorkers(for: engine)), mode.displayName)) {
+                        PillStepper(value: Binding(
+                            get: { store.settings.ttsWorkers(for: engine) },
+                            set: { store.settings.ttsWorkersByEngine[engine.rawValue] = $0 }
+                        ), range: 1...engine.maxWorkers)
+                    }
+                }
+            }
+
+        }
+    }
+}
+
+// MARK: - Engines
+
+private struct EnginesSettingsPane: View {
+    @Environment(SettingsStore.self) private var settingsStore
+
+    var body: some View {
+        @Bindable var store = settingsStore
+        VStack(alignment: .leading, spacing: 30) {
+            PillSection("Übersicht", footer: "Alle Engines auf einen Blick. Laufzeiten richtest du hier mit einem Klick ein; Sprachmodelle und Stimmen lädst du in den Abschnitten darunter. Leistung und Parallelität: Einstellungen → Leistung.") {
+                EngineOverviewCard()
+            }
+
             PillSection("Allgemein") {
                 PillRow(title: "Fallback-Engine", subtitle: "Für neue Importe, wenn keine Standardstimme der Sprache greift.") {
                     PillPicker(selection: $store.settings.ttsEngine,
                                options: TTSEngineID.allCases.map { PillOption(value: $0, label: $0.shortName) })
                 }
-                PillRow(title: "Parallele Audio-Worker", subtitle: "Kapitel, die gleichzeitig gerendert werden. Auf Apple Silicon sind 2 meist optimal.") {
-                    PillStepper(value: $store.settings.ttsParallelWorkers, range: 1...4)
+            }
+
+            PillSection("Hugging Face") {
+                HuggingFaceAccountCard()
+            }
+
+            PillSection("Phonon", footer: "Gradiums Phonon 40m: sehr schnell (mehrere Kapitel parallel auf der CPU), natürliche Stimmen für Deutsch, Englisch, Französisch und Spanisch. Nur nicht-kommerzielle Nutzung (CC BY-NC 4.0). Die Stimmen einer Sprache kommen mit ihrem Modell.") {
+                PillRow(title: "Standardstimme (Phonon)") {
+                    PillPicker(selection: $store.settings.phononVoice,
+                               options: PhononEngine(settings: settingsStore.settings, environment: .shared).availableVoices().map { PillOption(value: $0.id, label: $0.displayName) })
                 }
+                PhononModelsCard()
+            }
+
+            PillSection("Pocket TTS", footer: "Kyutais Pocket TTS: schnell auf der CPU, Deutsch, Englisch, Französisch, Spanisch und Italienisch, dazu lokales Stimmklonen aus einer kurzen Aufnahme. Jede Stimme spricht jede Sprache; die Muttersprachler-Stimme klingt am natürlichsten. CC BY 4.0.") {
+                PillRow(title: "Standardstimme (Pocket TTS)") {
+                    PillPicker(selection: $store.settings.pocketVoice,
+                               options: PocketEngine(settings: settingsStore.settings, environment: .shared).availableVoices().map { PillOption(value: $0.id, label: $0.displayName) })
+                }
+                PillRow(title: "Hohe Qualität (24 Schichten)", subtitle: "Natürlicher, aber etwa dreimal langsamer und 2,4 GB Arbeitsspeicher je Worker. Braucht das jeweilige Modell.") {
+                    PillToggle(isOn: $store.settings.pocketHighQuality)
+                }
+                PocketModelsCard()
             }
 
             PillSection("Speicher-Schutz & RAM-Watchdog", footer: "Überwacht den Arbeitsspeicher während der Audio-Synthese (inklusive aller Hintergrund-Worker), um macOS vor Überlastung zu schützen.") {
@@ -694,7 +768,7 @@ private struct EnginesSettingsPane: View {
             }
 
             PillSection("Kokoro") {
-                PillRow(title: "Englische Standardstimme (Kokoro)") {
+                PillRow(title: "Standardstimme (Kokoro)") {
                     PillPicker(selection: $store.settings.kokoroVoice,
                                options: KokoroEngine.standardVoices.map { PillOption(value: $0.id, label: $0.displayName) })
                 }
@@ -785,13 +859,15 @@ extension TTSEngineID {
     /// Short engine names for pickers (the long names explain the runtime).
     var shortName: String {
         switch self {
-        case .kokoro: return L("Kokoro (Englisch)")
+        case .kokoro: return L("Kokoro")
         case .piper: return L("Piper")
         case .kokoroGerman: return L("Kokoro Deutsch")
         case .kokoroThorsten: return L("Kokoro Thorsten")
         case .supertonic3: return L("Supertonic 3")
         case .omniVoice: return L("OmniVoice")
         case .appleSystem: return L("macOS-Systemstimmen")
+        case .phonon: return L("Phonon")
+        case .pocketTTS: return L("Pocket TTS")
         }
     }
 }

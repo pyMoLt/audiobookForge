@@ -81,6 +81,11 @@ final class LibraryStore: @unchecked Sendable {
             books[index] = book
         } else {
             books.append(book)
+            // A new book is complete in memory and has nothing on disk yet:
+            // mark it hydrated so a lookup before the first flush doesn't
+            // "hydrate" it into a text baseline that was never written
+            // (v4 fix: imported books lost their texts after a restart).
+            hydratedBookIDs.insert(book.id)
         }
         if usesV3Layout {
             dirtyBookIDs.withLock { $0.insert(book.id) }

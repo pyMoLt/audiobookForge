@@ -87,7 +87,10 @@ enum PausePlanner {
     /// identical.
     static func pausePlan(for segments: [PlannedSegment], determinismKey: String, settings: AppSettings) -> PausePlan {
         let pauses = segments.enumerated().map { index, segment in
-            jitteredPauseMs(kind: segment.kind, determinismKey: determinismKey, segmentIndex: index, settings: settings)
+            settings.naturalPauseRhythm
+                ? naturalPauseMs(segment: segment, next: segments.indices.contains(index + 1) ? segments[index + 1] : nil,
+                                 determinismKey: determinismKey, segmentIndex: index, settings: settings)
+                : jitteredPauseMs(kind: segment.kind, determinismKey: determinismKey, segmentIndex: index, settings: settings)
         }
         return PausePlan(
             leadInMs: max(0, settings.chapterLeadInMs),
@@ -127,6 +130,50 @@ enum PausePlanner {
         let unit = deterministicUnit(seed: determinismKey, segmentIndex: segmentIndex)
         let jitter = (unit * 2.0 - 1.0) * amplitude
         return max(0, Int((Double(base) + jitter).rounded()))
+    }
+
+    /// Smallest target pause between two sentences of a paragraph in the
+    /// natural rhythm — the engines' own gap alone sounds metronomic.
+    static let naturalSentenceFloorMs = 160
+
+    /// Natural rhythm (v4): the boundary's target pause, shaped by the text
+    /// (`rhythmFactor`), then varied deterministically by up to
+    /// ± `pauseVariationMs` (half of it between sentences, so a paragraph
+    /// keeps flowing). Never below a short audible breath.
+    static func naturalPauseMs(segment: PlannedSegment, next: PlannedSegment?, determinismKey: String, segmentIndex: Int, settings: AppSettings) -> Int {
+        var target = Double(basePauseMs(kind: segment.kind, settings: settings))
+        if segment.kind == .sentence { target = max(target, Double(naturalSentenceFloorMs)) }
+        target *= rhythmFactor(text: segment.text, nextText: next?.text)
+        let scale = segment.kind == .sentence ? 0.5 : 1.0
+        let amplitude = max(target * Double(max(0, settings.pauseJitterPercent)) / 100, Double(max(0, settings.pauseVariationMs)) * scale)
+        let unit = deterministicUnit(seed: determinismKey, segmentIndex: segmentIndex) * 2 - 1
+        let floor = segment.kind == .sentence ? 60.0 : target * 0.4
+        return Int(max(floor, target + unit * amplitude).rounded())
+    }
+
+    /// How the text itself stretches or shortens the pause after it.
+    static func rhythmFactor(text: String, nextText: String?) -> Double {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Look past closing quotes/brackets for the real sentence end.
+        let core = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”„»«’‘)]"))
+        var factor = 1.0
+        if core.hasSuffix("…") || core.hasSuffix("...") {
+            factor *= 1.6
+        } else if core.hasSuffix("—") || core.hasSuffix("–") {
+            factor *= 1.4
+        } else if let last = core.last {
+            switch last {
+            case "?": factor *= 1.2
+            case "!": factor *= 1.15
+            case ":": factor *= 1.25
+            case ";": factor *= 0.9
+            default: break
+            }
+        }
+        let length = trimmed.count
+        if length < 35 { factor *= 0.75 } else if length > 160 { factor *= 1.25 } else if length > 100 { factor *= 1.1 }
+        if let first = nextText?.trimmingCharacters(in: .whitespaces).first, "„\"“»«‚".contains(first) { factor *= 1.15 }
+        return factor
     }
 
     /// Stable pseudo-random value in [0, 1) from the seed + segment index
@@ -172,9 +219,18 @@ enum PausePlanner {
         return false
     }
 
+    /// Spoken label in front of figure descriptions, per language (v4).
+    static let figureLabels: [String: String] = [
+        "de": "Abbildung:", "en": "Figure:", "fr": "Illustration :", "es": "Figura:", "it": "Figura:",
+    ]
+
+    static func figureLabel(forLanguage code: String) -> String {
+        figureLabels[String(code.prefix(2))] ?? "Figure:"
+    }
+
     /// A figure description block inserted by the vision pass.
     static func isFigureLine(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return trimmed.hasPrefix("Abbildung:") || trimmed.hasPrefix("Figure:")
+        return figureLabels.values.contains { trimmed.hasPrefix($0) }
     }
 }

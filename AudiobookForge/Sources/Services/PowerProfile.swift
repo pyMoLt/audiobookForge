@@ -25,8 +25,8 @@ enum PowerMode: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var summary: String {
         switch self {
-        case .maximum: return L("Mindestens 2 Worker, schnelle Kerne, großer MLX-Cache, volle Animationen")
-        case .balanced: return L("Höchstens 2 Worker, normale Priorität, Animationen an")
+        case .maximum: return L("Alle Worker je Engine, schnelle Kerne, großer MLX-Cache, volle Animationen")
+        case .balanced: return L("Halbe Worker (mind. 2), normale Priorität, Animationen an")
         case .saver: return L("1 Worker auf Effizienzkernen, kleiner Speicher, ruhende Szenen")
         }
     }
@@ -37,8 +37,10 @@ enum PowerMode: String, Codable, CaseIterable, Identifiable, Sendable {
         // Measured 2026-10-19 (Kokoro, 12k chars): 1 worker 448 chars/s,
         // 2 → 617 (+38 %), 3 → 618 (GPU saturated, +4 GB RAM). So the
         // maximum profile runs at least 2; more only if set explicitly.
-        case .maximum: return max(2, min(userSetting, 4))
-        case .balanced: return max(1, min(userSetting, 2))
+        // v4: the user's per-engine choice (defaults from the engine
+        // benchmarks) applies in full; balanced halves it.
+        case .maximum: return max(1, userSetting)
+        case .balanced: return max(1, min(userSetting, max(2, userSetting / 2)))
         case .saver: return 1
         }
     }

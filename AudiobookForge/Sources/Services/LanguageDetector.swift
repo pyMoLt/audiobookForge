@@ -58,6 +58,11 @@ enum LanguageDetector {
             let voice = settings.defaultVoiceEN
             return (voice.engine, voice.voice)
         }
+        // v4: French, Spanish, Italian have their own default voices.
+        if VoiceCatalog.galleryLanguages.contains(String(languageCode.prefix(2))) {
+            let voice = settings.defaultVoiceID(forLanguage: languageCode)
+            return (voice.engine, voice.voice)
+        }
         return (settings.ttsEngine, settings.defaultVoice(for: settings.ttsEngine))
     }
 }

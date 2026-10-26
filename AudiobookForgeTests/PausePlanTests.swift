@@ -23,6 +23,9 @@ final class PausePlanTests: XCTestCase {
         s.chapterLeadInMs = leadIn
         s.chapterTailMs = tail
         s.pauseJitterPercent = jitter
+        // These tests pin the fixed-pause planner; the v4 natural rhythm
+        // has its own tests below.
+        s.naturalPauseRhythm = false
         return s
     }
 
@@ -193,5 +196,51 @@ final class VoiceCatalogTests: XCTestCase {
             XCTAssertFalse(profile.displayName.contains("Kokoro"))
             XCTAssertFalse(profile.displayName.contains("Piper"))
         }
+    }
+
+}
+
+/// v4 natural speech rhythm (text-aware, varied pauses).
+final class NaturalPauseRhythmTests: XCTestCase {
+
+    private func naturalSettings(variation: Int = 0) -> AppSettings {
+        var s = AppSettings()
+        s.naturalPauseRhythm = true
+        s.pauseVariationMs = variation
+        s.pauseJitterPercent = 0
+        s.sentencePauseMs = 0
+        s.paragraphPauseMs = 450
+        return s
+    }
+
+    func testNaturalRhythmGivesSentencesABreathAndFollowsPunctuation() {
+        let s = naturalSettings()
+        let text = "Er wartete lange auf eine Antwort, doch niemand kam die Treppe hinauf zu ihm. Kam denn wirklich niemand mehr zu ihm hinauf? Nein. Er wartete weiter …"
+        let plan = PausePlanner.pausePlan(for: text, determinismKey: "k", settings: s)
+        XCTAssertEqual(plan.pauseAfterMs.count, 4, "\(PausePlanner.plan(text).map(\.text))")
+        XCTAssertTrue(plan.pauseAfterMs.dropLast().allSatisfy { $0 >= 60 }, "Satzpausen sind nie 0: \(plan.pauseAfterMs)")
+        XCTAssertGreaterThan(plan.pauseAfterMs[1], plan.pauseAfterMs[2], "Frage pausiert länger als ein kurzes „Nein.“")
+    }
+
+    func testNaturalRhythmVariesAroundTargetWithinRange() {
+        let s = naturalSettings(variation: 400)
+        let sentences = (0..<40).map { _ in "Dies ist ein ganz gewöhnlicher Satz von mittlerer Länge im Absatz." }
+        let text = sentences.joined(separator: "\n\n")
+        let pauses = PausePlanner.pausePlan(for: text, determinismKey: "chapter", settings: s).pauseAfterMs
+        let target = 450.0 * PausePlanner.rhythmFactor(text: sentences[0], nextText: sentences[0])
+        XCTAssertGreaterThan(Set(pauses).count, 20, "Pausen dürfen nicht alle gleich sein")
+        XCTAssertTrue(pauses.allSatisfy { Double($0) >= target - 400 - 1 && Double($0) <= target + 400 + 1 })
+        let again = PausePlanner.pausePlan(for: text, determinismKey: "chapter", settings: s).pauseAfterMs
+        XCTAssertEqual(pauses, again, "deterministisch je Kapitel")
+    }
+
+    func testRhythmFactorReadsPunctuationLengthAndDialogue() {
+        XCTAssertGreaterThan(PausePlanner.rhythmFactor(text: "Und dann…", nextText: nil), PausePlanner.rhythmFactor(text: "Und dann.", nextText: nil))
+        let question = "Kommst du heute Abend noch zu uns in die Stadt?“"
+        XCTAssertGreaterThan(PausePlanner.rhythmFactor(text: question, nextText: nil),
+                             PausePlanner.rhythmFactor(text: "Kommst du heute Abend noch zu uns in die Stadt.“", nextText: nil),
+                             "Frage (auch vor schließendem Anführungszeichen) pausiert länger")
+        let plain = "Ein Satz von ganz normaler Länge, der nichts Besonderes hat."
+        XCTAssertGreaterThan(PausePlanner.rhythmFactor(text: plain, nextText: "„Hallo“, sagte sie."), PausePlanner.rhythmFactor(text: plain, nextText: "Sie sagte Hallo."))
     }
 }

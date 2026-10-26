@@ -37,13 +37,19 @@ enum FrontBackMatterClassifier {
     private static let frontMatterTitles: Set<String> = [
         "titelei", "impressum", "vorwort", "autorenverzeichnis", "geleitwort", "vorbemerkung", "danksagung", "widmung",
         "title page", "imprint", "preface", "foreword", "front matter",
+        // v4: French, Spanish, Italian.
+        "préface", "avant-propos", "remerciements", "dédicace", "prefacio", "prólogo", "agradecimientos", "dedicatoria",
+        "prefazione", "premessa", "ringraziamenti", "dedica", "colophon",
     ]
     private static let tocTitles: Set<String> = [
         "inhaltsverzeichnis", "inhalt", "contents", "table of contents", "übersicht",
+        "table des matières", "sommaire", "índice", "contenido", "índice general", "indice", "sommario",
     ]
     private static let backMatterTitles: Set<String> = [
         "literatur", "literaturverzeichnis", "sachverzeichnis", "register", "stichwortverzeichnis", "glossar", "index", "abkürzungsverzeichnis", "abbildungsverzeichnis", "tabellenverzeichnis", "anhang",
         "bibliography", "acknowledgements", "appendix",
+        "bibliographie", "annexe", "glossaire", "index alphabétique", "bibliografía", "apéndice", "glosario",
+        "bibliografia", "appendice", "glossario", "indice analitico",
     ]
 
     /// Normalizes a title for keyword comparison (lowercase, trimmed,

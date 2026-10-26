@@ -130,7 +130,7 @@ struct DiagnosticsTabView: View {
 
             setupCard(
                 title: "Piper einrichten",
-                note: String(localized: "Schlanke Python-Umgebung unter \((piper.directory.path as NSString).abbreviatingWithTildeInPath) mit piper-tts. Stimmen werden einzeln unter „Engines & Leistung“ geladen."),
+                note: String(localized: "Schlanke Python-Umgebung unter \((piper.directory.path as NSString).abbreviatingWithTildeInPath) mit piper-tts. Stimmen werden einzeln unter „Engines & Downloads“ geladen."),
                 isRunning: isRunningPiperSetup, log: piperSetupLog, action: runPiperSetup)
 
             PillSection("Pfade") {
@@ -246,9 +246,11 @@ struct DiagnosticsTabView: View {
             let supertonicStatus = DependencyChecker.checkSupertonic(environment: supertonic)
             let omniVoice = DependencyChecker.checkOmniVoice(environment: OmniVoiceEnvironmentManager.shared)
             let systemVoices = DependencyChecker.checkSystemVoices()
+            let phonon = DependencyChecker.checkPhonon()
+            let pocket = DependencyChecker.checkPocket()
             let llm = await DependencyChecker.checkLLMEndpoint(settings: settings)
             await MainActor.run {
-                self.statuses = [ffmpeg, python, kokoro, piperStatus, germanKokoroStatus, supertonicStatus, omniVoice, systemVoices, llm]
+                self.statuses = [ffmpeg, python, kokoro, piperStatus, germanKokoroStatus, supertonicStatus, phonon, pocket, omniVoice, systemVoices, llm]
                 self.isChecking = false
             }
         }

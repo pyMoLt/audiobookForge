@@ -500,6 +500,11 @@ struct SidebarView: View {
                 showRenameBook = true
             }
             moveMenu(for: book)
+            if book.status == .completed {
+                Button("Neu vertonen …", systemImage: "waveform.badge.mic") {
+                    NotificationCenter.default.post(name: .openRevoice, object: book.id)
+                }
+            }
             Divider()
             Button("Aus Bibliothek entfernen", role: .destructive) {
                 bookToDelete = book

@@ -34,6 +34,17 @@
         }
       }
     },
+    "%@ Bücher": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ books"
+          }
+        }
+      }
+    },
     "%@ Hörzeit": {
       "extractionState": "manual",
       "localizations": {
@@ -52,6 +63,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ characters"
+          }
+        }
+      }
+    },
+    "%@ hörbereit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ready to listen"
           }
         }
       }
@@ -85,6 +107,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ — %lld characters"
+          }
+        }
+      }
+    },
+    "%d Systemstimmen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d system voices"
+          }
+        }
+      }
+    },
+    "%d · in Leistung ändern": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d · change in Performance"
           }
         }
       }
@@ -320,6 +364,17 @@
         }
       }
     },
+    "0 = natürliche Pause der Engine (im natürlichen Rhythmus mindestens 160 ms)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 = the engine's natural pause (at least 160 ms with natural rhythm)"
+          }
+        }
+      }
+    },
     "0 = unbegrenzt": {
       "extractionState": "manual",
       "localizations": {
@@ -540,6 +595,17 @@
         }
       }
     },
+    "Abmelden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out"
+          }
+        }
+      }
+    },
     "Aktionen": {
       "extractionState": "manual",
       "localizations": {
@@ -617,6 +683,17 @@
         }
       }
     },
+    "Alle %d Stimmen auf %@ ansehen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See all %d voices in %@"
+          }
+        }
+      }
+    },
     "Alle Bücher": {
       "extractionState": "manual",
       "localizations": {
@@ -624,6 +701,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "All Books"
+          }
+        }
+      }
+    },
+    "Alle Engines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All engines"
+          }
+        }
+      }
+    },
+    "Alle Engines auf einen Blick. Laufzeiten richtest du hier mit einem Klick ein; Sprachmodelle und Stimmen lädst du in den Abschnitten darunter. Leistung und Parallelität: Einstellungen → Leistung.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All engines at a glance. Set up runtimes here with one click; download language models and voices in the sections below. Performance and parallelism: Settings → Performance."
           }
         }
       }
@@ -639,6 +738,17 @@
         }
       }
     },
+    "Alle Stimmen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All voices"
+          }
+        }
+      }
+    },
     "Alle Stimmen durchhören": {
       "extractionState": "manual",
       "localizations": {
@@ -646,6 +756,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Listen to all voices"
+          }
+        }
+      }
+    },
+    "Alle Worker je Engine, schnelle Kerne, großer MLX-Cache, volle Animationen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All workers per engine, performance cores, large MLX cache, full animations"
           }
         }
       }
@@ -672,6 +793,17 @@
         }
       }
     },
+    "Alle temporären Caches leeren?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty all temporary caches?"
+          }
+        }
+      }
+    },
     "Allgemein": {
       "extractionState": "manual",
       "localizations": {
@@ -690,6 +822,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "On power adapter"
+          }
+        }
+      }
+    },
+    "Am schnellsten": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastest"
           }
         }
       }
@@ -727,6 +870,17 @@
         }
       }
     },
+    "Angemeldet als": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in as"
+          }
+        }
+      }
+    },
     "Anlegen": {
       "extractionState": "manual",
       "localizations": {
@@ -734,6 +888,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Create"
+          }
+        }
+      }
+    },
+    "Anmelden nötig": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in required"
           }
         }
       }
@@ -789,6 +954,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Set Up AudiobookForge"
+          }
+        }
+      }
+    },
+    "AudiobookForge kann diese automatisch als eigenständige Laufzeit herunterladen — ohne Homebrew oder Terminal.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AudiobookForge can download these automatically as a self-contained runtime — no Homebrew or Terminal needed."
           }
         }
       }
@@ -866,6 +1042,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "A recording or audio file becomes your own voice, imitated by %@%@."
+          }
+        }
+      }
+    },
+    "Aufnahme oder Audiodatei wird als eigene Stimme angelegt und von %@ nachgeahmt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A recording or audio file becomes your own voice, imitated by %@."
           }
         }
       }
@@ -1013,6 +1200,17 @@
         }
       }
     },
+    "Automatisch einrichten (empfohlen)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up automatically (recommended)"
+          }
+        }
+      }
+    },
     "Automatisch erkannt": {
       "extractionState": "manual",
       "localizations": {
@@ -1101,6 +1299,17 @@
         }
       }
     },
+    "Befehle kopieren, im Terminal ausführen (brew.sh) und danach „Erneut prüfen“ klicken:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the commands, run them in Terminal (brew.sh), then click “Check again”:"
+          }
+        }
+      }
+    },
     "Behalten": {
       "extractionState": "manual",
       "localizations": {
@@ -1141,6 +1350,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Both"
+          }
+        }
+      }
+    },
+    "Bekannte freie Community-Stimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Well-known free community voice"
           }
         }
       }
@@ -1255,6 +1475,17 @@
         }
       }
     },
+    "Beste Qualität": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best quality"
+          }
+        }
+      }
+    },
     "Bewegung": {
       "extractionState": "manual",
       "localizations": {
@@ -1317,6 +1548,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Image Description · Summary"
+          }
+        }
+      }
+    },
+    "Bildbeschreibungen gleichzeitig": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image descriptions at once"
           }
         }
       }
@@ -1409,6 +1651,17 @@
         }
       }
     },
+    "Bitte zuerst auf Hugging Face anmelden und den Nutzungsbedingungen des Modells zustimmen:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please sign in to Hugging Face and accept the model's terms first:"
+          }
+        }
+      }
+    },
     "Box-Labels": {
       "extractionState": "manual",
       "localizations": {
@@ -1482,6 +1735,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Book not found"
+          }
+        }
+      }
+    },
+    "Buch nicht gefunden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book not found."
           }
         }
       }
@@ -1563,6 +1827,28 @@
         }
       }
     },
+    "Caches aufräumen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean up caches"
+          }
+        }
+      }
+    },
+    "Caches leeren": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty caches"
+          }
+        }
+      }
+    },
     "Darstellung": {
       "extractionState": "manual",
       "localizations": {
@@ -1614,6 +1900,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose file(s)…"
+          }
+        }
+      }
+    },
+    "Dateien in diesem Cache-Ordner werden gelöscht. Bei Laufzeitumgebungen müssen die Pakete beim nächsten Mal neu geladen werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files in this cache folder will be deleted. Runtime environments will download their packages again next time."
           }
         }
       }
@@ -1702,6 +1999,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "German"
+          }
+        }
+      }
+    },
+    "Deutsche Kokoro-Feinabstimmungen (MLX): warme Erzählerstimmen, sehr schnell.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German Kokoro fine-tunes (MLX): warm narrator voices, very fast."
           }
         }
       }
@@ -1816,6 +2124,17 @@
         }
       }
     },
+    "Dieses Buch wird gerade verarbeitet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book is being processed right now."
+          }
+        }
+      }
+    },
     "Dieses Kapitel neu generieren": {
       "extractionState": "manual",
       "localizations": {
@@ -1904,6 +2223,17 @@
         }
       }
     },
+    "EN, FR, ES, IT bereit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EN, FR, ES, IT ready"
+          }
+        }
+      }
+    },
     "Echtzeit": {
       "extractionState": "manual",
       "localizations": {
@@ -1977,6 +2307,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your voice · English"
+          }
+        }
+      }
+    },
+    "Eigene Stimme — gerendert mit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your own voice — rendered with"
           }
         }
       }
@@ -2069,6 +2410,28 @@
         }
       }
     },
+    "Einige Modelle (Phonon 40m, Pocket TTS) gibt es erst nach Zustimmung zu ihren Nutzungsbedingungen. Lege auf Hugging Face ein Lese-Token an und füge es hier ein; es wird im Schlüsselbund gespeichert. Die Zustimmung gibst du je Modell einmal auf seiner Seite — sie gilt für dein Konto, also auch auf anderen Macs.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some models (Phonon 40m, Pocket TTS) are only available after accepting their terms. Create a read token on Hugging Face and paste it here; it is stored in the keychain. You accept the terms once per model on its page — they apply to your account, so also on other Macs."
+          }
+        }
+      }
+    },
+    "Einleitung": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduction"
+          }
+        }
+      }
+    },
     "Einleitungswort": {
       "extractionState": "manual",
       "localizations": {
@@ -2087,6 +2450,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reading in"
+          }
+        }
+      }
+    },
+    "Einrichten": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up"
           }
         }
       }
@@ -2179,6 +2553,17 @@
         }
       }
     },
+    "Empfohlen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended"
+          }
+        }
+      }
+    },
     "Energie": {
       "extractionState": "manual",
       "localizations": {
@@ -2190,6 +2575,17 @@
         }
       }
     },
+    "Energiemodi, Parallelität je Engine, KI- und Bildanfragen, Speicherschutz": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy modes, parallelism per engine, AI and image requests, memory protection"
+          }
+        }
+      }
+    },
     "Engine nach Sprache wählen": {
       "extractionState": "manual",
       "localizations": {
@@ -2197,6 +2593,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose engine by language"
+          }
+        }
+      }
+    },
+    "Engine noch nicht eingerichtet (Einstellungen → Engines & Downloads).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine not set up yet (Settings → Engines & Downloads)."
+          }
+        }
+      }
+    },
+    "Engine noch nicht eingerichtet (Einstellungen → Engines & Leistung).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine not set up yet (Settings → Engines & Downloads)."
+          }
+        }
+      }
+    },
+    "Engines & Downloads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engines & Downloads"
           }
         }
       }
@@ -2252,6 +2681,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remove"
+          }
+        }
+      }
+    },
+    "Entfernt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed."
           }
         }
       }
@@ -2329,6 +2769,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "First Voices"
+          }
+        }
+      }
+    },
+    "Erstellen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
           }
         }
       }
@@ -2553,6 +3004,17 @@
         }
       }
     },
+    "Französisch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "French"
+          }
+        }
+      }
+    },
     "Fußnoten einbeziehen": {
       "extractionState": "manual",
       "localizations": {
@@ -2762,6 +3224,28 @@
         }
       }
     },
+    "Gib einen Namen für diesen neuen Bibliotheksbereich ein.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a name for this new library section."
+          }
+        }
+      }
+    },
+    "Gib einen neuen Namen für das Hörbuch ein.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a new name for the audiobook."
+          }
+        }
+      }
+    },
     "Gibt dem Modell das Ende des vorherigen Abschnitts mit.": {
       "extractionState": "manual",
       "localizations": {
@@ -2839,6 +3323,28 @@
         }
       }
     },
+    "Gradiums Phonon 40m: die schnellste Engine (viele Kapitel gleichzeitig auf der CPU), natürliche, gut verständliche Stimmen. Je Sprache ein kleines Modell (~78 MB). Nur nicht-kommerzielle Nutzung.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gradium's Phonon 40m: the fastest engine (many chapters at once on the CPU), natural, clear voices. One small model per language (~78 MB). Non-commercial use only."
+          }
+        }
+      }
+    },
+    "Gradiums Phonon 40m: sehr schnell (mehrere Kapitel parallel auf der CPU), natürliche Stimmen für Deutsch, Englisch, Französisch und Spanisch. Nur nicht-kommerzielle Nutzung (CC BY-NC 4.0). Die Stimmen einer Sprache kommen mit ihrem Modell.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gradium's Phonon 40m: very fast (several chapters in parallel on the CPU), natural voices for German, English, French and Spanish. Non-commercial use only (CC BY-NC 4.0). A language's voices come with its model."
+          }
+        }
+      }
+    },
     "Grafiken, Schemata und Tabellen erkennen": {
       "extractionState": "manual",
       "localizations": {
@@ -2905,6 +3411,17 @@
         }
       }
     },
+    "Größen neu berechnen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recalculate sizes"
+          }
+        }
+      }
+    },
     "Größere Mindestkapitelgröße (echte Buchkapitel sind selten winzig). Jedes Original-Kapitel bekommt genau einen Zusammenfassungs-Aufruf (bei sehr langen Kapiteln notfalls mehrere) — nie mehrere Kapitel in einem Aufruf gemischt, damit der Buch-Kapiteltitel als Überschrift erhalten bleibt.": {
       "extractionState": "manual",
       "localizations": {
@@ -2923,6 +3440,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Good"
+          }
+        }
+      }
+    },
+    "Halbe Worker (mind. 2), normale Priorität, Animationen an": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Half the workers (at least 2), normal priority, animations on"
           }
         }
       }
@@ -2982,6 +3510,61 @@
         }
       }
     },
+    "Hohe Qualität (24 Schichten)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High quality (24 layers)"
+          }
+        }
+      }
+    },
+    "Hugging-Face-Kommandozeile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face command line"
+          }
+        }
+      }
+    },
+    "Hugging-Face-Konto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face account"
+          }
+        }
+      }
+    },
+    "Hugging-Face-Konto, Laufzeiten, Sprachmodelle und Stimmen je Engine": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hugging Face account, runtimes, language models and voices per engine"
+          }
+        }
+      }
+    },
+    "Höchste Audioauflösung für Piper (Deutsch)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highest audio resolution for Piper (German)"
+          }
+        }
+      }
+    },
     "Höchstens 2 Worker, normale Priorität, Animationen an": {
       "extractionState": "manual",
       "localizations": {
@@ -3022,6 +3605,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Create Audiobook"
+          }
+        }
+      }
+    },
+    "Hörbuch umbenennen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename audiobook"
+          }
+        }
+      }
+    },
+    "Hörbuch umbenennen …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename audiobook …"
           }
         }
       }
@@ -3279,6 +3884,17 @@
         }
       }
     },
+    "Italienisch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italian"
+          }
+        }
+      }
+    },
     "Jede Beschreibung wird als eigener Absatz genau an der Stelle des Bildes eingefügt — nie mitten im Satz. Pro Buch in der Prüfung umschaltbar; Beschreibungen werden gespeichert und wiederverwendet.": {
       "extractionState": "manual",
       "localizations": {
@@ -3297,6 +3913,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Every setting is a pill: text left, control right."
+          }
+        }
+      }
+    },
+    "Jede Pause weicht bis zu so viel nach oben oder unten ab (zwischen Sätzen die Hälfte).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each pause varies up or down by up to this much (half of it between sentences)."
           }
         }
       }
@@ -3330,6 +3957,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "AI & Summary"
+          }
+        }
+      }
+    },
+    "KI-Anfragen gleichzeitig": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI requests at once"
           }
         }
       }
@@ -3532,6 +4170,17 @@
         }
       }
     },
+    "Kapitel wird neu erzeugt …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regenerating chapter …"
+          }
+        }
+      }
+    },
     "Kapitel zu lang für Wort-Diff — unformatierter Vergleich": {
       "extractionState": "manual",
       "localizations": {
@@ -3583,6 +4232,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keep chapter audio"
+          }
+        }
+      }
+    },
+    "Kapitel-Audio-Zwischenspeicher, Verarbeitungsprotokolle und temporäre Sicherungen werden geleert. Deine Bücher und Einstellungen bleiben erhalten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chapter audio cache, processing logs and temporary backups will be emptied. Your books and settings are kept."
           }
         }
       }
@@ -3686,6 +4346,28 @@
         }
       }
     },
+    "Karte antippen macht sie zur Standardstimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the card to make it the default voice"
+          }
+        }
+      }
+    },
+    "Karte antippen verwendet sie für dieses Buch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the card to use it for this book"
+          }
+        }
+      }
+    },
     "Kein Text für eine Vorschau gefunden.": {
       "extractionState": "manual",
       "localizations": {
@@ -3715,6 +4397,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "No recording yet."
+          }
+        }
+      }
+    },
+    "Keine Stimme passt zu den Filtern.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No voice matches the filters."
           }
         }
       }
@@ -3785,6 +4478,17 @@
         }
       }
     },
+    "Klare, natürliche deutsche Stimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear, natural German voice"
+          }
+        }
+      }
+    },
     "Kleinere Mindestkapitelgröße. Mehrere Original-Abschnitte werden gleichmäßig auf möglichst wenige, ähnlich große Aufrufe verteilt (±15% Toleranz) — die KI baut die eigentliche Fein-Gliederung dabei selbst per Zwischenüberschriften.": {
       "extractionState": "manual",
       "localizations": {
@@ -3818,6 +4522,28 @@
         }
       }
     },
+    "Klonen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloning"
+          }
+        }
+      }
+    },
+    "Kokoro (EN, FR, ES, IT)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kokoro (EN, FR, ES, IT)"
+          }
+        }
+      }
+    },
     "Kokoro (Englisch)": {
       "extractionState": "manual",
       "localizations": {
@@ -3825,6 +4551,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kokoro (English)"
+          }
+        }
+      }
+    },
+    "Kokoro (MLX): sehr schnell auf Apple Silicon, ausdrucksstarke englische Stimmen, dazu Französisch, Spanisch und Italienisch.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kokoro (MLX): very fast on Apple silicon, expressive English voices, plus French, Spanish and Italian."
           }
         }
       }
@@ -3880,6 +4617,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kokoro German — models"
+          }
+        }
+      }
+    },
+    "Kokoro Deutsch: Martin": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kokoro German: Martin"
+          }
+        }
+      }
+    },
+    "Kokoro Deutsch: Thorsten": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kokoro German: Thorsten"
+          }
+        }
+      }
+    },
+    "Kokoro Deutsch: Victoria": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kokoro German: Victoria"
           }
         }
       }
@@ -3950,6 +4720,39 @@
         }
       }
     },
+    "Kokoro-MLX-Umgebung zuerst unter Einstellungen → Engines & Downloads einrichten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up the Kokoro MLX environment first under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
+    "Kokoro-Umgebung ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Kokoro environment is not set up. Please set it up under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
+    "Konnte nicht gestartet werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not be started."
+          }
+        }
+      }
+    },
     "Kontext": {
       "extractionState": "manual",
       "localizations": {
@@ -4016,6 +4819,28 @@
         }
       }
     },
+    "Kyutais Pocket TTS: schnell auf der CPU, Deutsch, Englisch, Französisch, Spanisch und Italienisch, dazu lokales Stimmklonen aus einer kurzen Aufnahme. Jede Stimme spricht jede Sprache; die Muttersprachler-Stimme klingt am natürlichsten. CC BY 4.0.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kyutai's Pocket TTS: fast on the CPU, German, English, French, Spanish and Italian, plus local voice cloning from a short recording. Every voice speaks every language; the native-speaker voice sounds most natural. CC BY 4.0."
+          }
+        }
+      }
+    },
+    "Kyutais Pocket TTS: schnell auf der CPU, fünf Sprachen, jede Stimme spricht jede Sprache. Klont eigene Stimmen lokal aus 10–20 Sekunden Aufnahme. Optional 24-Schichten-Modelle für mehr Natürlichkeit.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kyutai's Pocket TTS: fast on the CPU, five languages, every voice speaks every language. Clones your own voice locally from a 10–20 second recording. Optional 24-layer models for more natural speech."
+          }
+        }
+      }
+    },
     "Kästen (Merke, Klinischer Fall …)": {
       "extractionState": "manual",
       "localizations": {
@@ -4071,6 +4896,94 @@
         }
       }
     },
+    "Lade herunter …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading …"
+          }
+        }
+      }
+    },
+    "Laden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
+    "Langsam": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slow"
+          }
+        }
+      }
+    },
+    "Laufzeit fehlt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime missing"
+          }
+        }
+      }
+    },
+    "Laufzeit fehlt (mlx-audio)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime missing (mlx-audio)"
+          }
+        }
+      }
+    },
+    "Laufzeit fehlt (piper-tts)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime missing (piper-tts)"
+          }
+        }
+      }
+    },
+    "Laufzeit fehlt (~25 MB)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime missing (~25 MB)"
+          }
+        }
+      }
+    },
+    "Laufzeit fehlt (~900 MB, PyTorch)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime missing (~900 MB, PyTorch)"
+          }
+        }
+      }
+    },
     "Laufzeit für die lokalen Sprachmodelle (Kokoro über MLX).": {
       "extractionState": "manual",
       "localizations": {
@@ -4078,6 +4991,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Runtime for the local speech models (Kokoro via MLX)."
+          }
+        }
+      }
+    },
+    "Laufzeit oder Sprachmodell fehlt; unter Einstellungen → Engines & Downloads laden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime or language model missing; download under Settings → Engines & Downloads."
           }
         }
       }
@@ -4170,6 +5094,17 @@
         }
       }
     },
+    "Leeren …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty …"
+          }
+        }
+      }
+    },
     "Lehrbücher & Skripte": {
       "extractionState": "manual",
       "localizations": {
@@ -4177,6 +5112,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Textbooks & Lecture Notes"
+          }
+        }
+      }
+    },
+    "Leistung": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Performance"
           }
         }
       }
@@ -4214,6 +5160,17 @@
         }
       }
     },
+    "Liest mit deiner eigenen Stimme vor — läuft vollständig lokal. Pocket TTS ist deutlich schneller, OmniVoice kann mehr Sprachen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reads with your own voice — runs entirely locally. Pocket TTS is much faster, OmniVoice speaks more languages."
+          }
+        }
+      }
+    },
     "Literatur & Belletristik": {
       "extractionState": "manual",
       "localizations": {
@@ -4232,6 +5189,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leave out references & acknowledgements"
+          }
+        }
+      }
+    },
+    "Lizenz akzeptieren": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accept license"
           }
         }
       }
@@ -4720,6 +5688,17 @@
         }
       }
     },
+    "Mitgelieferte Hörprobe": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bundled sample"
+          }
+        }
+      }
+    },
     "Mitlese-Text ein-/ausblenden": {
       "extractionState": "manual",
       "localizations": {
@@ -4775,6 +5754,28 @@
         }
       }
     },
+    "Modell entfernt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model removed."
+          }
+        }
+      }
+    },
+    "Modell fehlt; unter Einstellungen → Engines & Downloads herunterladen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model missing; download it under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
     "Modell oder MLX-Laufzeit fehlt; unter TTS-Engine installieren.": {
       "extractionState": "manual",
       "localizations": {
@@ -4793,6 +5794,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Install model and runtime"
+          }
+        }
+      }
+    },
+    "Modell unten laden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download model below"
+          }
+        }
+      }
+    },
+    "Modell unten laden (2 GB)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download model below (2 GB)"
           }
         }
       }
@@ -4841,6 +5864,17 @@
         }
       }
     },
+    "Modelle unten laden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download models below"
+          }
+        }
+      }
+    },
     "Modus": {
       "extractionState": "manual",
       "localizations": {
@@ -4848,6 +5882,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mode"
+          }
+        }
+      }
+    },
+    "Muttersprache": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Native speaker"
           }
         }
       }
@@ -4951,6 +5996,28 @@
         }
       }
     },
+    "Natürlicher Sprechrhythmus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natural speech rhythm"
+          }
+        }
+      }
+    },
+    "Natürlicher, aber etwa dreimal langsamer und 2,4 GB Arbeitsspeicher je Worker. Braucht das jeweilige Modell.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More natural, but about three times slower and 2.4 GB of memory per worker. Needs the matching model."
+          }
+        }
+      }
+    },
     "Neonstadt": {
       "extractionState": "manual",
       "localizations": {
@@ -5006,6 +6073,39 @@
         }
       }
     },
+    "Neu vertonen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-voice"
+          }
+        }
+      }
+    },
+    "Neu vertonen fehlgeschlagen — die bisherige Fassung bleibt erhalten:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-voicing failed — the previous version is kept:"
+          }
+        }
+      }
+    },
+    "Neu vertonen …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-voice …"
+          }
+        }
+      }
+    },
     "Neue Bücher bekommen automatisch die Stimme ihrer Sprache — pro Buch in der Prüfung änderbar.": {
       "extractionState": "manual",
       "localizations": {
@@ -5013,6 +6113,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "New books automatically get the voice of their language — changeable per book in review."
+          }
+        }
+      }
+    },
+    "Neuen Bereich benennen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name the new section"
           }
         }
       }
@@ -5068,6 +6179,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Newest"
+          }
+        }
+      }
+    },
+    "Nicht angemeldet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not signed in"
+          }
+        }
+      }
+    },
+    "Nicht eingerichtet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not set up"
+          }
+        }
+      }
+    },
+    "Nicht gefunden. Automatisch installierbar oder per brew install python@3.12": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not found. Can be installed automatically or via brew install python@3.12"
+          }
+        }
+      }
+    },
+    "Nicht gefunden. Automatisch über Einrichtungsassistenten installierbar (oder per brew install ffmpeg)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not found. Can be installed automatically with the setup assistant (or via brew install ffmpeg)"
           }
         }
       }
@@ -5134,6 +6289,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "No voice of your own yet — “Record” takes 10–20 s, or import an audio file."
+          }
+        }
+      }
+    },
+    "Noch nicht eingerichtet (Einstellungen → Engines & Downloads)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not set up yet (Settings → Engines & Downloads)"
           }
         }
       }
@@ -5281,6 +6447,28 @@
         }
       }
     },
+    "Okay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Okay"
+          }
+        }
+      }
+    },
+    "OmniVoice (600+ Sprachen)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OmniVoice (600+ languages)"
+          }
+        }
+      }
+    },
     "OmniVoice (MLX, 600+ Sprachen)": {
       "extractionState": "manual",
       "localizations": {
@@ -5288,6 +6476,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "OmniVoice (MLX, 600+ languages)"
+          }
+        }
+      }
+    },
+    "OmniVoice Diffusion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OmniVoice Diffusion"
+          }
+        }
+      }
+    },
+    "OmniVoice — Modell (2,04 GB)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OmniVoice — model (2.04 GB)"
+          }
+        }
+      }
+    },
+    "OmniVoice: Diffusionsmodell mit 600+ Sprachen und Stimmklonen, langsamer, ~2 GB.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OmniVoice: diffusion model with 600+ languages and voice cloning, slower, ~2 GB."
           }
         }
       }
@@ -5402,6 +6623,17 @@
         }
       }
     },
+    "Parallelität": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parallelism"
+          }
+        }
+      }
+    },
     "Passt das Limit automatisch an die gewählte Engine und Worker-Anzahl an (z. B. OmniVoice ~4,1 GB pro Worker).": {
       "extractionState": "manual",
       "localizations": {
@@ -5431,6 +6663,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pauses"
+          }
+        }
+      }
+    },
+    "Pausen folgen dem Text: länger nach „…“, Fragen, langen Sätzen und vor wörtlicher Rede, kürzer nach kurzen Sätzen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pauses follow the text: longer after “…”, questions, long sentences and before dialogue, shorter after short sentences."
           }
         }
       }
@@ -5512,6 +6755,50 @@
         }
       }
     },
+    "Phonon (Gradium, sehr schnell, DE/EN/FR/ES)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phonon (Gradium, very fast, DE/EN/FR/ES)"
+          }
+        }
+      }
+    },
+    "Phonon 40m · ~78 MB · %d Stimmen · CC BY-NC 4.0": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phonon 40m · ~78 MB · %d voices · CC BY-NC 4.0"
+          }
+        }
+      }
+    },
+    "Phonon — Sprachmodelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phonon — language models"
+          }
+        }
+      }
+    },
+    "Phonon-Sprachmodell oder Stimme fehlt. Bitte unter Einstellungen → Engines & Downloads laden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phonon language model or voice missing. Please download it under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
     "Piper (lokal, deutsche & weitere Stimmen)": {
       "extractionState": "manual",
       "localizations": {
@@ -5567,6 +6854,61 @@
         }
       }
     },
+    "Piper-Umgebung ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Piper environment is not set up. Please set it up under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
+    "Piper: Eva K": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piper: Eva K"
+          }
+        }
+      }
+    },
+    "Piper: Thorsten High": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piper: Thorsten High"
+          }
+        }
+      }
+    },
+    "Piper: Thorsten Medium": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piper: Thorsten Medium"
+          }
+        }
+      }
+    },
+    "Piper: klein und robust, viele Community-Stimmen, Echtzeit-Tempo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piper: small and robust, many community voices, real-time speed."
+          }
+        }
+      }
+    },
     "Platz %lld von %lld — wird danach automatisch eingesprochen": {
       "extractionState": "manual",
       "localizations": {
@@ -5607,6 +6949,61 @@
           "stringUnit": {
             "state": "translated",
             "value": "Placeholders: {{text}}, {{title}}. One call can contain several original chapters."
+          }
+        }
+      }
+    },
+    "Pocket TTS (Kyutai, schnell, DE/EN/FR/ES/IT, Klonen)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pocket TTS (Kyutai, fast, DE/EN/FR/ES/IT, cloning)"
+          }
+        }
+      }
+    },
+    "Pocket TTS (schnell)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pocket TTS (fast)"
+          }
+        }
+      }
+    },
+    "Pocket TTS — Sprachmodelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pocket TTS — language models"
+          }
+        }
+      }
+    },
+    "Pocket-TTS-Sprachmodell fehlt. Bitte unter Einstellungen → Engines & Downloads laden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pocket TTS language model missing. Please download it under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
+    "Portugiesisch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portuguese"
           }
         }
       }
@@ -5842,6 +7239,28 @@
         }
       }
     },
+    "Schlüsselbund": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keychain"
+          }
+        }
+      }
+    },
+    "Schnell": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast"
+          }
+        }
+      }
+    },
     "Schnell, ohne Download in der App, mittlere Qualität. Bessere Stimmen (z. B. „Anna (Premium)“) lädst du in den Systemeinstellungen unter Bedienungshilfen → Gesprochene Inhalte → Systemstimme → Stimmen verwalten; nach einem Neustart der App erscheinen sie hier.": {
       "extractionState": "manual",
       "localizations": {
@@ -5849,6 +7268,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fast, no download in the app, medium quality. Better voices (e.g. “Anna (Premium)”) are downloaded in System Settings under Accessibility → Spoken Content → System voice → Manage voices; they appear here after restarting the app."
+          }
+        }
+      }
+    },
+    "Schnelle, ressourcenschonende deutsche Stimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast, lightweight German voice"
           }
         }
       }
@@ -5871,6 +7301,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Smaller text"
+          }
+        }
+      }
+    },
+    "Schwankung um den Zielwert": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variation around the target"
           }
         }
       }
@@ -5930,6 +7371,17 @@
         }
       }
     },
+    "Spanisch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spanish"
+          }
+        }
+      }
+    },
     "Speicher-Schutz & RAM-Watchdog": {
       "extractionState": "manual",
       "localizations": {
@@ -5937,6 +7389,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Memory Protection & RAM Watchdog"
+          }
+        }
+      }
+    },
+    "Speicher-Übersicht & Aufräumen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage overview & cleanup"
+          }
+        }
+      }
+    },
+    "Speichern": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
           }
         }
       }
@@ -6117,6 +7591,17 @@
         }
       }
     },
+    "Standard-Klon-Engine für eigene Stimmen (600+ Sprachen)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloning engine for your own voices (600+ languages)"
+          }
+        }
+      }
+    },
     "Standard: ~/Documents/Audiobooks": {
       "extractionState": "manual",
       "localizations": {
@@ -6150,6 +7635,28 @@
         }
       }
     },
+    "Standardstimme (Kokoro)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default voice (Kokoro)"
+          }
+        }
+      }
+    },
+    "Standardstimme (Phonon)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default voice (Phonon)"
+          }
+        }
+      }
+    },
     "Standardstimme (Piper)": {
       "extractionState": "manual",
       "localizations": {
@@ -6161,6 +7668,17 @@
         }
       }
     },
+    "Standardstimme (Pocket TTS)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default voice (Pocket TTS)"
+          }
+        }
+      }
+    },
     "Standardstimme (Supertonic)": {
       "extractionState": "manual",
       "localizations": {
@@ -6168,6 +7686,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Default voice (Supertonic)"
+          }
+        }
+      }
+    },
+    "Standardstimme für": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default voice for"
           }
         }
       }
@@ -6201,6 +7730,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Default voices for German and English, gallery and your own voices"
+          }
+        }
+      }
+    },
+    "Standardstimmen je Sprache, Galerie und eigene Stimmen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default voices per language, gallery and your own voices"
+          }
+        }
+      }
+    },
+    "Starte Download …": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting download …"
           }
         }
       }
@@ -6282,6 +7833,17 @@
         }
       }
     },
+    "Stimme ist nicht eingerichtet — siehe Einstellungen → Engines & Downloads.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice is not set up — see Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
     "Stimme laden (~60 MB, Hugging Face rhasspy/piper-voices) — nach Bestätigung": {
       "extractionState": "manual",
       "localizations": {
@@ -6315,6 +7877,17 @@
         }
       }
     },
+    "Stimmen einzeln in der Galerie laden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download voices one by one in the gallery"
+          }
+        }
+      }
+    },
     "Stimmen-Galerie": {
       "extractionState": "manual",
       "localizations": {
@@ -6337,6 +7910,17 @@
         }
       }
     },
+    "Streaming-TTS mit geringer Latenz": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Streaming TTS with low latency"
+          }
+        }
+      }
+    },
     "Stromsparend": {
       "extractionState": "manual",
       "localizations": {
@@ -6344,6 +7928,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Power saving"
+          }
+        }
+      }
+    },
+    "Supertonic 3 (MLX): extrem schnell, gut für lange Sachtexte.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supertonic 3 (MLX): extremely fast, good for long non-fiction."
           }
         }
       }
@@ -6436,6 +8031,17 @@
         }
       }
     },
+    "TTS-Engine ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The TTS engine is not set up. Please set it up under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
     "Tasse": {
       "extractionState": "manual",
       "localizations": {
@@ -6509,6 +8115,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text as a book page, sentence by sentence"
+          }
+        }
+      }
+    },
+    "Text, Zusammenfassungen und Bildbeschreibungen bleiben erhalten. Die bisherige Fassung wird erst ersetzt, wenn die neue vollständig fertig ist — bei Abbruch bleibt sie unverändert. Hörproben lesen einen Abschnitt aus diesem Buch.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text, summaries and image descriptions are kept. The previous version is replaced only once the new one is complete — if cancelled, it stays unchanged. Previews read a passage from this book."
           }
         }
       }
@@ -6608,6 +8225,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Title"
+          }
+        }
+      }
+    },
+    "Token erstellen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create token"
+          }
+        }
+      }
+    },
+    "Token konnte nicht im Schlüsselbund gespeichert werden.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The token could not be saved to the keychain."
+          }
+        }
+      }
+    },
+    "Token ungültig": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid token"
+          }
+        }
+      }
+    },
+    "Token-Quelle:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token source:"
           }
         }
       }
@@ -6718,6 +8379,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Subfolders"
+          }
+        }
+      }
+    },
+    "Unwiderruflich leeren": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty permanently"
           }
         }
       }
@@ -6872,6 +8544,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vision Model"
+          }
+        }
+      }
+    },
+    "Vision-Modell · wirksam: %d": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision model · effective: %d"
           }
         }
       }
@@ -7041,6 +8724,28 @@
         }
       }
     },
+    "Weibliche deutsche Referenzstimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Female German reference voice"
+          }
+        }
+      }
+    },
+    "Weibliche deutsche Stimme": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Female German voice"
+          }
+        }
+      }
+    },
     "Weiter": {
       "extractionState": "manual",
       "localizations": {
@@ -7136,6 +8841,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "How much text the language model reads per call. Smaller = more faithful, larger = more context."
+          }
+        }
+      }
+    },
+    "Wie viele Kapitel je Engine gleichzeitig gesprochen werden. Startwerte aus Messungen auf Apple Silicon; der Energiemodus begrenzt sie (Ausgewogen halbiert, Stromsparend = 1). KI- und Bildanfragen laufen unabhängig davon parallel.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many chapters each engine speaks at once. Defaults come from measurements on Apple silicon; the energy mode caps them (Balanced halves, Power saving = 1). AI and image requests run in parallel independently."
+          }
+        }
+      }
+    },
+    "Wie viele Kapitel je Engine gleichzeitig gesprochen werden. Startwerte aus Messungen auf Apple Silicon; der Energiemodus begrenzt sie (Ausgewogen halbiert, Stromsparend = 1). KI- und Bildanfragen stellst du unter „KI & Zusammenfassung“ bzw. „Bilder“ ein.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many chapters each engine speaks at once. Defaults come from measurements on Apple silicon; the energy mode caps them (Balanced halves, Power saving = 1). AI and image requests are set under “AI & Summary” and “Images”."
           }
         }
       }
@@ -7415,6 +9142,17 @@
         }
       }
     },
+    "Zieh ein PDF oder EPUB ins Fenster. Weitere Stimmen und Engines (Phonon, Pocket TTS, Piper, Supertonic, eigene Stimmen) lädst du jederzeit unter Einstellungen → Engines & Downloads.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag a PDF or EPUB into the window. More voices and engines (Phonon, Pocket TTS, Piper, Supertonic, your own voices) can be downloaded anytime under Settings → Engines & Downloads."
+          }
+        }
+      }
+    },
     "Zieh ein PDF oder EPUB ins Fenster. Weitere Stimmen und Engines (Piper, Supertonic, eigene Stimmen) lädst du jederzeit unter Einstellungen → Engines & Leistung.": {
       "extractionState": "manual",
       "localizations": {
@@ -7499,6 +9237,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Destination folder"
+          }
+        }
+      }
+    },
+    "Zu den Engines & Downloads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to Engines & Downloads"
           }
         }
       }
@@ -7591,6 +9340,17 @@
         }
       }
     },
+    "Zusammen mit der Sprachausgabe unter „Leistung“ eingestellt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set together with speech output under “Performance”."
+          }
+        }
+      }
+    },
     "Zusammenfassen": {
       "extractionState": "manual",
       "localizations": {
@@ -7620,6 +9380,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Summary (narrated)"
+          }
+        }
+      }
+    },
+    "Zusammenfassung neu berechnen (KI)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recompute summary (AI)"
+          }
+        }
+      }
+    },
+    "Zusammenfassung über %@ · wirksam: %d": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summaries via %@ · effective: %d"
           }
         }
       }
@@ -7767,6 +9549,17 @@
         }
       }
     },
+    "hf_… Lese-Token": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hf_… read token"
+          }
+        }
+      }
+    },
     "höchste Qualität": {
       "extractionState": "manual",
       "localizations": {
@@ -7774,6 +9567,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "highest quality"
+          }
+        }
+      }
+    },
+    "keine Sprachmodelle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no language models"
           }
         }
       }
@@ -7811,6 +9615,17 @@
         }
       }
     },
+    "macOS-Systemstimmen: ohne Download, mittlere Qualität; Premium-Stimmen in den Systemeinstellungen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS system voices: no download, medium quality; premium voices in System Settings."
+          }
+        }
+      }
+    },
     "männlich": {
       "extractionState": "manual",
       "localizations": {
@@ -7829,6 +9644,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "near real time"
+          }
+        }
+      }
+    },
+    "nicht eingerichtet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not set up"
           }
         }
       }
@@ -7921,6 +9747,17 @@
         }
       }
     },
+    "wirksam: %d (%@)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "effective: %d (%@)"
+          }
+        }
+      }
+    },
     "z. B. „rER“, „N*“, „a b“": {
       "extractionState": "manual",
       "localizations": {
@@ -7928,6 +9765,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "e.g. “rER”, “N*”, “a b”"
+          }
+        }
+      }
+    },
+    "zum Laden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "to download"
+          }
+        }
+      }
+    },
+    "~220 MB · schnell · CC BY 4.0": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~220 MB · fast · CC BY 4.0"
+          }
+        }
+      }
+    },
+    "~700 MB · langsamer, natürlicher · CC BY 4.0": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~700 MB · slower, more natural · CC BY 4.0"
           }
         }
       }
@@ -8049,6 +9919,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Monitors memory during audio synthesis (including all background workers) to protect macOS from system freeze."
+          }
+        }
+      }
+    },
+    "„%@“ neu vertonen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-voice “%@”"
           }
         }
       }

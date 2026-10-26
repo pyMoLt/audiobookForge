@@ -319,7 +319,7 @@ enum PDFTextbookCleaner {
     // MARK: Cross references
 
     private static let referenceOnlyParenthesis = try! NSRegularExpression(
-        pattern: #"\s?\((?:\s*(?:▶|►|→)?\s*(?:vgl\.|siehe|see|cf\.)?\s*(?:S\.|Seite|Abb\.|Abbildung|Tab\.|Tabelle|Kap\.|Kapitel|Fig\.|Figure|p\.|pp\.)\s*[\d\.\–\-,\sa-zf]{1,30}[;,]?)+\)"#
+        pattern: #"\s?\((?:\s*(?:▶|►|→)?\s*(?:vgl\.|siehe|see|cf\.|voir|véase|vedi)?\s*(?:S\.|Seite|Abb\.|Abbildung|Tab\.|Tabelle|Kap\.|Kapitel|Fig\.|Figure|Figura|chap\.|cap\.|pág\.|p\.|pp\.)\s*[\d\.\–\-,\sa-zf]{1,30}[;,]?)+\)"#
     )
 
     /// Removes parentheses that only hold page/figure/chapter references

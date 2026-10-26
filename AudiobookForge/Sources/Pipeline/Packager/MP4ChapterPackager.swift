@@ -51,9 +51,12 @@ struct MP4ChapterPackager: ChapterPackager {
         try buildFFMetadata(book: book, chapters: chapterMarks).write(to: metadataURL, atomically: true, encoding: .utf8)
 
         let outputURL = outputDirectory.appendingPathComponent("\(sanitize(book.title)).\(format.fileExtension)")
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try FileManager.default.removeItem(at: outputURL)
-        }
+        // v4: mux into a staging file beside the target and swap it in only
+        // once ffmpeg succeeded — the previous file stays intact on failure
+        // (re-voicing, cancelled runs) and may itself be a mux source
+        // (chapters restore-cut from the packaged book).
+        let stagingURL = outputDirectory.appendingPathComponent(".abf-staging-\(UUID().uuidString).\(format.fileExtension)")
+        defer { try? FileManager.default.removeItem(at: stagingURL) }
 
         onProgress("Muxe finale \(format.fileExtension.uppercased())-Datei …")
 
@@ -85,9 +88,14 @@ struct MP4ChapterPackager: ChapterPackager {
         if chapterCodec == "aac" {
             arguments += ["-b:a", "\(settings.aacBitrateKbps)k"]
         }
-        arguments += ["-f", "ipod", outputURL.path]
+        arguments += ["-f", "ipod", stagingURL.path]
 
         try await FFmpegRunner.run(executable: ffmpeg, arguments: arguments)
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            _ = try FileManager.default.replaceItemAt(outputURL, withItemAt: stagingURL)
+        } else {
+            try FileManager.default.moveItem(at: stagingURL, to: outputURL)
+        }
 
         return outputURL
     }

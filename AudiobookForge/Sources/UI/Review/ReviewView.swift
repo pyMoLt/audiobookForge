@@ -218,7 +218,9 @@ struct ReviewView: View {
                         $0.voice = voiceID.voice
                     }
                 },
-                currentVoice: VoiceID(engine: book.engineID, voice: book.voice)
+                currentVoice: VoiceID(engine: book.engineID, voice: book.voice),
+                languageCode: book.outputLanguageCode,
+                previewText: RevoiceSheet.previewPassage(of: book, settings: settingsStore.settings)
             )
         }
     }

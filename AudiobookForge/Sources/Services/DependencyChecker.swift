@@ -60,7 +60,23 @@ enum DependencyChecker {
 
     static func checkOmniVoice(environment: OmniVoiceEnvironmentManager) -> DependencyStatus {
         DependencyStatus(id: "omnivoice", name: "OmniVoice Diffusion",
-                         state: environment.isReady() ? .ok(environment.modelDirectory()?.path ?? "Bereit") : .missing(String(localized: "Modell fehlt; unter Einstellungen → TTS-Engine herunterladen.")))
+                         state: environment.isReady() ? .ok(environment.modelDirectory()?.path ?? "Bereit") : .missing(String(localized: "Modell fehlt; unter Einstellungen → Engines & Downloads herunterladen.")))
+    }
+
+    static func checkPhonon(environment: PhononEnvironmentManager = .shared) -> DependencyStatus {
+        let languages = environment.installedLanguages
+        return DependencyStatus(id: "phonon", name: "Phonon (Gradium)",
+                                state: environment.isEnvironmentReady() && !languages.isEmpty
+                                    ? .ok(languages.map { $0.uppercased() }.joined(separator: ", "))
+                                    : .missing(String(localized: "Laufzeit oder Sprachmodell fehlt; unter Einstellungen → Engines & Downloads laden.")))
+    }
+
+    static func checkPocket(environment: PocketEnvironmentManager = .shared) -> DependencyStatus {
+        let languages = environment.installedLanguages
+        return DependencyStatus(id: "pocket", name: "Pocket TTS (Kyutai)",
+                                state: environment.isEnvironmentReady() && !languages.isEmpty
+                                    ? .ok(languages.map { $0.uppercased() }.joined(separator: ", "))
+                                    : .missing(String(localized: "Laufzeit oder Sprachmodell fehlt; unter Einstellungen → Engines & Downloads laden.")))
     }
 
     static func checkSystemVoices() -> DependencyStatus {

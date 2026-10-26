@@ -116,7 +116,7 @@ enum PDFFigureDetector {
     }
 
     private static let captionRegex = try! NSRegularExpression(
-        pattern: #"^(Abb\.|Abbildung|Fig\.|Figure|Bild|Tab\.|Tabelle|Table|Schema|Grafik)\s*\d+[\.\-–\d]*"#,
+        pattern: #"^(Abb\.|Abbildung|Fig\.|Figure|Figura|Bild|Tab\.|Tabelle|Table|Tableau|Tabla|Tabella|Schema|Grafik|Illustration|Ilustración|Illustrazione)\s*\d+[\.\-–\d]*"#,
         options: [.caseInsensitive]
     )
 

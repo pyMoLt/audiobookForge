@@ -22,6 +22,8 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var selection: SidebarSelection? = .home
+    /// Book whose "Neu vertonen" sheet is open (v4).
+    @State private var revoiceBook: RevoiceRequest?
     @State private var importError: String?
     /// Files currently being read in (shown right away, so a large
     /// textbook doesn't look like nothing happened).
@@ -148,6 +150,17 @@ struct ContentView: View {
                 .tint(accent.color)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSetupAssistant)) { _ in showSetup = true }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsPane)) { note in
+            if let raw = note.object as? String, let pane = SettingsPane(rawValue: raw) { selection = .settings(pane) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openRevoice)) { note in
+            if let id = note.object as? UUID { revoiceBook = RevoiceRequest(id: id) }
+        }
+        .sheet(item: $revoiceBook) { request in
+            RevoiceSheet(bookID: request.id)
+                .environment(\.flowAccent, accent)
+                .tint(accent.color)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
             playback.savePosition()
         }
@@ -366,8 +379,16 @@ extension FocusedValues {
 }
 
 extension Notification.Name {
-    /// Reopens the setup assistant (Settings → Diagnose).
+    /// Reopens the setup assistant (Settings → Diagnose, Engines & Downloads).
     static let openSetupAssistant = Notification.Name("ABFOpenSetupAssistant")
+    /// Shows a settings page; `object` is the `SettingsPane` raw value (v4).
+    static let openSettingsPane = Notification.Name("ABFOpenSettingsPane")
+    /// Opens "Neu vertonen" for a book; `object` is its UUID (v4).
+    static let openRevoice = Notification.Name("ABFOpenRevoice")
+}
+
+struct RevoiceRequest: Identifiable {
+    let id: UUID
 }
 
 extension UTType {

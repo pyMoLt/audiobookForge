@@ -365,6 +365,10 @@ final class FolderStoreTests: XCTestCase {
         store = FolderStore(root: root)
     }
 
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: root)
+    }
+
     func testAddRenamePersist() {
         let folder = store.add(name: "Leseliste")
         XCTAssertEqual(store.folders().map(\.name), ["Leseliste"])

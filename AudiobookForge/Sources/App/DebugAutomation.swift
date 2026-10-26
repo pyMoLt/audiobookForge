@@ -161,6 +161,21 @@ struct DebugAutomationReceiver: ViewModifier {
                     }
                     libraryStore.upsert(book)
                 }
+                // v4: re-voice a finished book ("revoiceBook" = title part).
+                if let title = info["revoiceBook"], let engineRaw = info["engine"], let engine = TTSEngineID(rawValue: engineRaw),
+                   let voice = info["voice"], let book = libraryStore.books.first(where: { Self.matches($0, title) }) {
+                    pipelineController.revoice(bookID: book.id, engine: engine, voice: voice, speed: Double(info["speed"] ?? "1") ?? 1,
+                                               resummarize: info["resummarize"] == "1")
+                }
+                if let title = info["revoiceSheet"], let book = libraryStore.books.first(where: { Self.matches($0, title) }) {
+                    NotificationCenter.default.post(name: .openRevoice, object: book.id)
+                }
+                if info["revoiceSheet"] == "close" { NSApp.keyWindow?.sheets.forEach { NSApp.keyWindow?.endSheet($0) } }
+                if let dir = info["buildSamples"] {
+                    let settings = settingsStore.settings
+                    let only = info["engines"].map { Set($0.split(separator: ",").compactMap { TTSEngineID(rawValue: String($0)) }) }
+                    Task.detached { await VoiceSampleBuilder.build(into: URL(fileURLWithPath: dir), settings: settings, only: only) }
+                }
                 if let title = info["open"], let book = libraryStore.books.first(where: { Self.matches($0, title) }) {
                     selection = .book(book.id)
                 }

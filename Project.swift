@@ -25,8 +25,8 @@ let project = Project(
             deploymentTargets: .macOS("26.0"),
             infoPlist: .extendingDefault(with: [
                 "CFBundleDisplayName": "AudiobookForge",
-                "CFBundleShortVersionString": "3.0.0",
-                "CFBundleVersion": "3",
+                "CFBundleShortVersionString": "4.0.0",
+                "CFBundleVersion": "4",
                 "CFBundleIconFile": "AppIcon",
                 "CFBundleIconName": "AppIcon",
                 "LSMinimumSystemVersion": "26.0",

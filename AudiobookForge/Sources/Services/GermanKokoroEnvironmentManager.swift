@@ -30,7 +30,7 @@ final class GermanKokoroEnvironmentManager: @unchecked Sendable {
         }
         let bridge = BridgeEnvironmentManager.shared
         guard bridge.isEnvironmentReady() else {
-            throw TTSEngineError.notReady("Kokoro-MLX-Umgebung zuerst unter Diagnose einrichten.")
+            throw TTSEngineError.notReady(L("Kokoro-MLX-Umgebung zuerst unter Einstellungen → Engines & Downloads einrichten."))
         }
         guard let script = Bundle.main.url(forResource: "setup_german_kokoro", withExtension: "py", subdirectory: "Bridge")
             ?? Bundle.main.url(forResource: "setup_german_kokoro", withExtension: "py") else {

@@ -1,0 +1,626 @@
+[
+ {
+  "name": "Nele",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "Rounded, open tone with gentle lift at the ends of phrases and an easy, flowing rhythm.",
+  "rank": 1
+ },
+ {
+  "name": "Jette",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "An upbeat young German voice with a light girlish tone and warm bounce, a chipper assistant who keeps things moving with a smile.",
+  "rank": 2
+ },
+ {
+  "name": "Annika",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "A sparky, attentive German adult voice that gets to the point with a smile. Ideal for fast, efficient customer support and helpful voice assistants.",
+  "rank": 3
+ },
+ {
+  "name": "Jule",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "Open and cheerful, sitting high and close over music, with an airy lift that softens where the copy turns personal.",
+  "rank": 4
+ },
+ {
+  "name": "Lotta",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "High forward energy with a close, present tone and crisp consonant attack that cuts through a music bed, plus real lift on the punchline.",
+  "rank": 5
+ },
+ {
+  "name": "Josefine",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "Rounded and even in tone, sincere at the phrase ends, with consonants that hold up over a handset.",
+  "rank": 6
+ },
+ {
+  "name": "Svea",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "female",
+  "description": "Sparky and to the point, with clean consonant edges, brisk rhythm and a decisive drop on the final line.",
+  "rank": 7
+ },
+ {
+  "name": "Anton",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "A vibrant, engaging German adult voice that makes every explanation feel personal. Built for product guides and walk-through assistants.",
+  "rank": 1
+ },
+ {
+  "name": "Mirko",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "Punchy and close-miked in feel, with hard edges on the consonants and a decisive drop on the final line.",
+  "rank": 2
+ },
+ {
+  "name": "Mats",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "A sparky, attentive German adult voice that gets to the point with a smile. Ideal for fast, efficient customer support and helpful voice assistants.",
+  "rank": 3
+ },
+ {
+  "name": "Henrik",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "An easy-going, friendly German adult voice that puts callers instantly at ease. Great for onboarding assistants and warm concierge interactions.",
+  "rank": 4
+ },
+ {
+  "name": "Leon",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "A bright, welcoming German adult voice with the warmth of a great receptionist. Perfect for greeting customers and friendly front-line support.",
+  "rank": 5
+ },
+ {
+  "name": "Mika",
+  "language": "de",
+  "locale": "de-de",
+  "gender": "male",
+  "description": "Punchy and to the point, with a firm, resonant core, clean word endings and real snap between loud and quiet.",
+  "rank": 6
+ },
+ {
+  "name": "Maeve",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "A sparky, attentive British English adult voice that gets to the point with a smile. Ideal for fast, efficient customer support and helpful voice assistants.",
+  "rank": 1
+ },
+ {
+  "name": "Freya",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "A young British voice, glossy and confident with fast, girly chatter and bubbly sparkle, perfect for a friendly receptionist or assistant.",
+  "rank": 2
+ },
+ {
+  "name": "Pippa",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "A confident, upbeat British English adult voice with infectious energy. Perfect for proactive assistants and motivating customer success calls.",
+  "rank": 3
+ },
+ {
+  "name": "Elodie-Rose",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "A young British voice with sharp, enthusiastic energy and crisp articulation, sparky and to the point for customer support and care.",
+  "rank": 4
+ },
+ {
+  "name": "Lottie",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "Sparky and to the point, high forward energy with clean edges on the consonants and the range to drop low for one line then climb back.",
+  "rank": 6
+ },
+ {
+  "name": "Bryony",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "Full, rich mid-range tones, softly relaxed and spoken close to the mic, moving briskly with light pitch play.",
+  "rank": 7
+ },
+ {
+  "name": "Imogen",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "female",
+  "description": "A bubbly, friendly British English adult voice that puts callers instantly at ease. Great for onboarding assistants and warm concierge interactions.",
+  "rank": 99
+ },
+ {
+  "name": "Alfie",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "Punchy and forward, with crisp consonant attack and a pitch that lifts across a line, sitting high over a music bed.",
+  "rank": 1
+ },
+ {
+  "name": "Hugh",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "Soft and close, airy in texture, with lively pitch movement and an attentive, sincere delivery.",
+  "rank": 2
+ },
+ {
+  "name": "Edwin",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "Efficient and firm, sincere in attention, with tidy articulation that holds up at phone bandwidth.",
+  "rank": 3
+ },
+ {
+  "name": "Spencer",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "Light and airy, sitting a touch higher, with crisp consonants and a slow, patient delivery.",
+  "rank": 4
+ },
+ {
+  "name": "Toby",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "A sparky, attentive British English adult voice that gets to the point with a smile. Ideal for fast, efficient customer support and helpful voice assistants.",
+  "rank": 5
+ },
+ {
+  "name": "Teddy",
+  "language": "en",
+  "locale": "en-gb",
+  "gender": "male",
+  "description": "Sparky and close in, quick off the mark, with firm consonants and the range to drop right down for a clause then come back up.",
+  "rank": 6
+ },
+ {
+  "name": "Zoey",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Playful, upbeat and Gen Z energy voice with a standard American accent. Perfect for engaging conversations!",
+  "rank": 1
+ },
+ {
+  "name": "Juniper",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Cheerful presence with real resonance under it, personable when the copy turns intimate and decisive on the final line.",
+  "rank": 2
+ },
+ {
+  "name": "Everly",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Rounded, soft-edged tone with gentle lift at the end of phrases and an easy, relaxed delivery.",
+  "rank": 3
+ },
+ {
+  "name": "Hadley",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Settled, even-toned and genuinely kind, with crisp consonants that hold up over a handset.",
+  "rank": 5
+ },
+ {
+  "name": "Delia",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Low, grounded and quick to the point, with a sincerity that keeps an apology honest.",
+  "rank": 6
+ },
+ {
+  "name": "Harper",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "female",
+  "description": "Modern, confident and friendly voice with a standard American accent.",
+  "rank": 99
+ },
+ {
+  "name": "Easton",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "Punchy and close in, with crisp consonant attack that cuts through a music bed and pitch that lifts across each line.",
+  "rank": 1
+ },
+ {
+  "name": "Micah",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "Buoyant and high in energy, with a playful lift at the ends of phrases and clean attack that survives a loud mix.",
+  "rank": 2
+ },
+ {
+  "name": "Trevor",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "Buoyant energy over a resonant mid-low core, phrases landing softly and consonants cutting through a handset.",
+  "rank": 3
+ },
+ {
+  "name": "Preston",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "Trim, focused delivery with clean edges on every consonant and a steady, low-set core that carries through phone bandwidth.",
+  "rank": 5
+ },
+ {
+  "name": "Miles",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "Resonant and decisive, with genuine dynamic range, dropping right down for one clause then driving back up.",
+  "rank": 6
+ },
+ {
+  "name": "Russell",
+  "language": "en",
+  "locale": "en-us",
+  "gender": "male",
+  "description": "A high-energy American adult voice that pushes and encourages with the intensity of someone who genuinely believes in you.",
+  "rank": 99
+ },
+ {
+  "name": "Noa",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "A glossy, confident young Castilian Spanish voice with fast, girly charm and warmth, a bubbly assistant that makes every chat sparkle.",
+  "rank": 1
+ },
+ {
+  "name": "Lucía-Sol",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "A bouncy, chipper young Castilian Spanish voice with a cute upward lilt, bringing playful energy to friendly reception and support.",
+  "rank": 2
+ },
+ {
+  "name": "Candela",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "An enthusiastic, bubbly young Castilian Spanish voice, animated like a beauty guru mid-tutorial, adding fun energy to customer care.",
+  "rank": 3
+ },
+ {
+  "name": "Celia",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "Sparky and forward, light on the air but firm on every consonant, landing the final line without pushing.",
+  "rank": 4
+ },
+ {
+  "name": "Alba",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "A sweet, expressive young Castilian Spanish voice, soft and girly with lively emphasis, sparky and to the point for efficient support.",
+  "rank": 5
+ },
+ {
+  "name": "Alicia",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "Rounded and softly resonant, settling low in the range, with phrases that land gently and an apology that sounds genuinely meant.",
+  "rank": 6
+ },
+ {
+  "name": "Nerea",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "female",
+  "description": "Rounded, lightly resonant tone with gentle lift at the end of phrases and an even, relaxed delivery.",
+  "rank": 7
+ },
+ {
+  "name": "Marcos",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "A confident, upbeat Peninsular Spanish adult voice with infectious energy. Perfect for proactive assistants and motivating customer success calls.",
+  "rank": 1
+ },
+ {
+  "name": "Borja",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "Resonant and punchy, driving a rhythmic read that cuts over a loud music bed and lands squarely on the brand name.",
+  "rank": 2
+ },
+ {
+  "name": "Nuno",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "Resonant and easy-going, with a relaxed mid-range delivery and a hint of playful lift at the end of phrases.",
+  "rank": 4
+ },
+ {
+  "name": "Izan",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "Crisp consonant attack, forward energy and a punchy delivery that sits on top of a music bed.",
+  "rank": 5
+ },
+ {
+  "name": "Guillermo",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "Low and resonant, settled in tone, with phrases that land softly and an apology that sounds genuinely meant.",
+  "rank": 6
+ },
+ {
+  "name": "Iker",
+  "language": "es",
+  "locale": "es-es",
+  "gender": "male",
+  "description": "An easy-going, friendly Peninsular Spanish adult voice that puts callers instantly at ease. Great for onboarding assistants and warm concierge interactions.",
+  "rank": 99
+ },
+ {
+  "name": "Rebeca",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "Fuller and grounded in the low end, with hard consonant edges and a decisive punch saved for the brand name.",
+  "rank": 1
+ },
+ {
+  "name": "Danae",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "Sparky and punchy, with a light, airy top end, clean attack on every word and a brisk rhythm that lands the brand name.",
+  "rank": 3
+ },
+ {
+  "name": "Azucena",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "Weighted lower register with steady authority that comes from calm rather than volume, and diction that survives raised playback speed.",
+  "rank": 4
+ },
+ {
+  "name": "Jimena",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "Crisp consonant attack and a forward, sparky delivery that sits over a music bed, with pitch that lifts and drops inside a single line.",
+  "rank": 5
+ },
+ {
+  "name": "Ximena",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "A playful, expressive Mexican Spanish adult voice that turns everyday moments into stories. Great for engaging assistants and personable conversational AI.",
+  "rank": 6
+ },
+ {
+  "name": "Regina",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "female",
+  "description": "A confident, upbeat Mexican Spanish adult voice with the natural assurance of a closer. Ideal for proactive assistants and sales-led customer interactions.",
+  "rank": 99
+ },
+ {
+  "name": "Lalo",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Fuller and rounder low end, concise phrasing and a decisive drop on the last line, with range to pull back for one clause and push again.",
+  "rank": 1
+ },
+ {
+  "name": "Aldo",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Forward, close-miked energy with crisp consonant attack and pitch that climbs and drops across a line.",
+  "rank": 2
+ },
+ {
+  "name": "Yael",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Close, ringing tone with a grin in it, dropping right down for one clause then climbing into the payoff.",
+  "rank": 3
+ },
+ {
+  "name": "Ulises",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Low and resonant, with a settled delivery and consonants that survive a handset.",
+  "rank": 4
+ },
+ {
+  "name": "Leonel",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Velvety and even tempered, sincere when an apology is due and genuinely pleased when the news is good.",
+  "rank": 5
+ },
+ {
+  "name": "Nico",
+  "language": "es",
+  "locale": "es-mx",
+  "gender": "male",
+  "description": "Sparky and to the point, with clean articulation that cuts through a loud music bed and a brisk rhythm that follows the copy's beats.",
+  "rank": 6
+ },
+ {
+  "name": "Noémie",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "A young Parisian voice, warm and expressive with a quick playful pace and delicate high notes, a care specialist who stays bright and witty.",
+  "rank": 1
+ },
+ {
+  "name": "Coralie",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "A young Parisian voice, sweet and airy with fast, giggly girly charm, a bubbly assistant who makes every interaction feel light.",
+  "rank": 2
+ },
+ {
+  "name": "Tiphaine",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "Rounded, low-set tone with even phrasing and consonants that stay crisp through a handset.",
+  "rank": 3
+ },
+ {
+  "name": "Maëlys",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "A young French voice, energetic and enthusiastic with a welcoming, upbeat delivery, sparky and to the point for responsive support.",
+  "rank": 4
+ },
+ {
+  "name": "Orianne",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "Airy and higher-set, gently buoyant, with sincerity that holds through an apology.",
+  "rank": 5
+ },
+ {
+  "name": "Solène",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "A young French voice, bright and high-pitched, warm and enthusiastic at a lively pace, a receptionist who greets everyone with delight.",
+  "rank": 6
+ },
+ {
+  "name": "Ninon",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "Pitch that moves across a sentence, a rounded mid tone and a sense of humour kept well in check.",
+  "rank": 7
+ },
+ {
+  "name": "Lilou",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "A young Parisian voice, buoyant and tender with rippling laughter, a light-hearted support voice that smiles while it helps.",
+  "rank": 8
+ },
+ {
+  "name": "Hélène",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "female",
+  "description": "Deep and resonant, carrying authority through steadiness rather than volume, with diction that survives raised playback speed.",
+  "rank": 9
+ },
+ {
+  "name": "Arnaud",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "Low and firm, quick to the point, consonants holding their shape at phone bandwidth.",
+  "rank": 2
+ },
+ {
+  "name": "Jules",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "A lively, expressive French adult voice that lights up around topics it loves. Great for animated recommendations and high-energy dialogue.",
+  "rank": 3
+ },
+ {
+  "name": "Baptiste",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "Lively and expressive, with pitch that lifts and dips across a phrase and a playful edge to every line.",
+  "rank": 4
+ },
+ {
+  "name": "Lucien",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "Rounded and settled, phrases landing softly, with an apology that sounds genuinely meant and good news that sounds like good news.",
+  "rank": 5
+ },
+ {
+  "name": "Marius",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "An energetic, well-poised French adult voice with the confident assurance of a natural closer. Ideal for sales pitches and high-conviction content.",
+  "rank": 6
+ },
+ {
+  "name": "Augustin",
+  "language": "fr",
+  "locale": "fr-fr",
+  "gender": "male",
+  "description": "A curious, animated French adult voice that lights up when sharing an unexpected fact. Perfect for geeky explainers and trivia-driven dialogue.",
+  "rank": 99
+ }
+]

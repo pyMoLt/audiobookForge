@@ -92,6 +92,9 @@ struct RunProgress: Sendable, Equatable {
         case .supertonic3: return 0.03
         case .omniVoice: return 0.8
         case .appleSystem: return 0.15
+        // ~25x real time per single-thread process (40m, q8).
+        case .phonon: return 0.04
+        case .pocketTTS: return 0.08
         }
     }
 

@@ -44,6 +44,17 @@ final class VoicePreviewPlayer: ObservableObject {
         stopPlayback()
         currentVoiceID = VoiceID(engine: engineID, voice: voice)
 
+        // v4: the bundled sample plays instantly, even before the engine
+        // is installed (only for the catalog's own sample text).
+        if let sampleURL = VoiceSampleLibrary.url(for: VoiceID(engine: engineID, voice: voice), text: text),
+           let file = try? AVAudioFile(forReading: sampleURL),
+           let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+           (try? file.read(into: buffer)) != nil {
+            isGenerating = false
+            play(buffer)
+            return
+        }
+
         let sampleText = String(SentenceSplitter.split(text)
             .prefix(max(1, settings.voicePreviewSentenceCount))
             .joined(separator: " ")

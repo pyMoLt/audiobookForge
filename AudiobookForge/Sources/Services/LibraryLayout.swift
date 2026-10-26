@@ -242,6 +242,10 @@ enum LibraryLayout {
         var folderID: UUID?
         var ambientSound: String?
         var ambientVolumePercent: Int?
+        /// Previous narration while re-voicing (v4) — must survive a crash
+        /// so the old version can still be restored. Only present during
+        /// a re-voicing run.
+        var revoiceBackup: RevoiceBackup?
         /// `sourceChapters` are identical to `rawImportedChapters` — only
         /// `text/raw.json` exists and both sides read from it.
         var sourceChaptersSameAsRaw: Bool = false
@@ -281,6 +285,7 @@ enum LibraryLayout {
             folderID = book.folderID
             ambientSound = book.ambientSound
             ambientVolumePercent = book.ambientVolumePercent
+            revoiceBackup = book.revoiceBackup
             sourceChaptersSameAsRaw = book.sourceChapters != nil
                 && book.sourceChapters == book.rawImportedChapters
         }
@@ -321,6 +326,7 @@ enum LibraryLayout {
             folderID = try c.decodeIfPresent(UUID.self, forKey: .folderID)
             ambientSound = try c.decodeIfPresent(String.self, forKey: .ambientSound)
             ambientVolumePercent = try c.decodeIfPresent(Int.self, forKey: .ambientVolumePercent)
+            revoiceBackup = try c.decodeIfPresent(RevoiceBackup.self, forKey: .revoiceBackup)
             sourceChaptersSameAsRaw = try c.decodeIfPresent(Bool.self, forKey: .sourceChaptersSameAsRaw) ?? false
         }
 
@@ -363,6 +369,7 @@ enum LibraryLayout {
             book.folderID = folderID
             book.ambientSound = ambientSound
             book.ambientVolumePercent = ambientVolumePercent
+            book.revoiceBackup = revoiceBackup
             return book
         }
     }

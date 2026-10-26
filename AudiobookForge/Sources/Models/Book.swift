@@ -138,6 +138,9 @@ struct BookProject: Codable, Identifiable, Sendable, Equatable {
     var topic: String?
     /// Confidence (0–1) of the automatic topic classification (plan 9.5).
     var topicConfidence: Double?
+    /// While the book is being re-voiced (v4): everything needed to put the
+    /// previous narration back if the new run fails or is cancelled.
+    var revoiceBackup: RevoiceBackup?
     /// Manual topic override — the automatic classifier never touches it.
     var topicOverride: String?
     /// User-created folder the book was manually filed into; wins over
@@ -156,4 +159,18 @@ struct BookProject: Codable, Identifiable, Sendable, Equatable {
     static func == (lhs: BookProject, rhs: BookProject) -> Bool {
         lhs.id == rhs.id
     }
+}
+
+/// Snapshot of a book's narration before re-voicing (v4). The old output
+/// files stay untouched on disk until the new run has packaged (staged
+/// packagers swap them in only at the end).
+struct RevoiceBackup: Codable, Sendable, Equatable {
+    var engineID: TTSEngineID
+    var voice: String
+    var speechSpeed: Double
+    var status: BookProjectStatus
+    var chapters: [Chapter]
+    var sourceChapters: [Chapter]?
+    var packagedAudio: PackagedAudioInfo?
+    var startedAt: Date = Date()
 }

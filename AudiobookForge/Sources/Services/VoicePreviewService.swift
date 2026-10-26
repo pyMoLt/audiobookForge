@@ -55,7 +55,7 @@ actor VoicePreviewService {
 
         let engine = TTSEngineFactory.engine(for: request.voiceID.engine, settings: settings)
         guard await engine.isReady(voice: request.voiceID.voice) else {
-            throw TTSEngineError.notReady("Stimme ist nicht eingerichtet — siehe Einstellungen → Diagnose.")
+            throw TTSEngineError.notReady(L("Stimme ist nicht eingerichtet — siehe Einstellungen → Engines & Downloads."))
         }
 
         // Transient file: the engines encode through ffmpeg, which needs a

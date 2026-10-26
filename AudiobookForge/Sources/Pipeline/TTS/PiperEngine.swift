@@ -47,7 +47,7 @@ struct PiperEngine: TTSEngine {
         onProgress: @escaping @Sendable (TTSProgressEvent) -> Void
     ) async throws -> TTSSynthesisResult {
         guard environment.isEnvironmentReady() else {
-            throw TTSEngineError.notReady("Piper-Umgebung ist nicht eingerichtet. Bitte in den Einstellungen unter Diagnose einrichten.")
+            throw TTSEngineError.notReady(L("Piper-Umgebung ist nicht eingerichtet. Bitte unter Einstellungen → Engines & Downloads einrichten."))
         }
         guard environment.isVoiceDownloaded(voice) else {
             throw TTSEngineError.notReady("Piper-Stimme '\(voice)' wurde noch nicht heruntergeladen.")

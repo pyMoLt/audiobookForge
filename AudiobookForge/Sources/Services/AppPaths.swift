@@ -30,6 +30,7 @@ enum AppPaths {
             let name = file.lastPathComponent
             if name.hasPrefix("AudiobookForge-chapter-") ||
                name.hasPrefix("AudiobookForge-pauses-") ||
+               name.hasPrefix("AudiobookForge-plan-") ||
                name.hasPrefix("ABF-pause-") ||
                name.hasPrefix("abf-audio-") {
                 if let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,

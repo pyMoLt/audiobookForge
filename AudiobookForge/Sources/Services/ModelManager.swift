@@ -247,7 +247,7 @@ final class ModelManager: @unchecked Sendable {
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws {
         guard bridge.isEnvironmentReady() else {
-            throw TTSEngineError.notReady("Kokoro-MLX-Umgebung zuerst unter Diagnose einrichten.")
+            throw TTSEngineError.notReady(L("Kokoro-MLX-Umgebung zuerst unter Einstellungen → Engines & Downloads einrichten."))
         }
 
         let targetDir = AppPaths.modelsDirectory.appendingPathComponent(targetSubfolder, isDirectory: true)
