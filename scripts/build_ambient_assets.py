@@ -22,8 +22,8 @@ import urllib.request
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "AudiobookForge", "AudiobookForge", "Resources", "Ambient")
-DOC = os.path.join(ROOT, "docs", "AMBIENT_LIZENZEN.md")
+OUT = os.path.join(ROOT, "AudiobookForge", "Resources", "Ambient")
+DOC = os.path.join(ROOT, "THIRD_PARTY.md")
 SR = 44100
 TMP_DIR = "/tmp"  # replaced in main() by the download cache
 

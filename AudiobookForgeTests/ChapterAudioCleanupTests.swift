@@ -193,6 +193,43 @@ final class ChapterAudioCleanupTests: XCTestCase {
         ])
     }
 
+    /// v4.1: chapters tagged on their first encode are moved, not copied;
+    /// an untagged (legacy) chapter is still copied with tags.
+    func testTaggedMP3ChaptersAreMovedNotCopied() async throws {
+        var book = BookProject(title: "Verschiebe-Buch", author: "Autorin", sourceType: .pdf,
+                               sourceURL: URL(fileURLWithPath: "/dev/null"), chapters: [],
+                               outputFormat: .mp3Chapters, voice: "af_heart", speechSpeed: 1.0)
+        let chapters = (0..<2).map { order -> Chapter in
+            var chapter = Chapter(title: "Teil \(order + 1)", rawText: "T", cleanedText: "T", order: order)
+            chapter.audioStatus = .ready
+            chapter.audioDurationSeconds = 0.8
+            return chapter
+        }
+        book.chapters = chapters
+        let tags = ChapterAudioTags.tags(for: book, narrated: chapters)
+        let tagged = work.appendingPathComponent("tagged.mp3")
+        let plain = work.appendingPathComponent("plain.mp3")
+        try await FFmpegRunner.run(executable: ffmpeg, arguments: [
+            "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=400:sample_rate=24000",
+            "-t", "0.8", "-c:a", "libmp3lame", "-qscale:a", "2"] + tags[chapters[0].id]!.ffmpegArguments + [tagged.path])
+        try await makeMP3(url: plain, seconds: 0.8, frequency: 500)
+
+        var settings = AppSettings()
+        settings.keepChapterAudioAfterPackaging = false
+        let output = work.appendingPathComponent("out", isDirectory: true)
+        _ = try await MP3ChapterPackager(settings: settings).package(
+            book: book,
+            chapterAudioFiles: [ChapterAudioFile(chapter: chapters[0], url: tagged), ChapterAudioFile(chapter: chapters[1], url: plain)],
+            outputDirectory: output, onProgress: { _ in })
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tagged.path), "getaggtes Kapitel wurde verschoben")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: plain.path), "ungetaggtes Kapitel wurde kopiert")
+        let names = try FileManager.default.contentsOfDirectory(atPath: output.path).sorted()
+        XCTAssertEqual(names, ["01 - Teil 1.mp3", "02 - Teil 2.mp3"])
+        let probe = FFProbeRunner.probeURL(for: ffmpeg)
+        let second = await ChapterAudioTags.readTag(of: output.appendingPathComponent("02 - Teil 2.mp3"), ffprobe: probe)
+        XCTAssertEqual(second, tags[chapters[1].id])
+    }
+
     func testRepackagingMP3FromItsOwnOutputKeepsEveryChapter() async throws {
         var book = BookProject(
             title: "MP3-Buch", author: "Test", sourceType: .pdf,

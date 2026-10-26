@@ -35,13 +35,33 @@ struct MP3ChapterPackager: ChapterPackager {
         try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: staging) }
         var finished: [String] = []
+        // v4.1: chapter MP3s that already carry exactly these tags (written
+        // on their first encode) are MOVED, not copied — no second write of
+        // the whole book. Moves are undone if packaging fails.
+        let ffprobe = FFProbeRunner.probeURL(for: ffmpeg)
+        let canMove = alreadyMP3 && !settings.keepChapterAudioAfterPackaging
+        var moved: [(from: URL, to: URL)] = []
+        func undoMoves() {
+            for move in moved.reversed() { try? fm.moveItem(at: move.to, to: move.from) }
+        }
 
+        do {
         for (index, item) in ordered.enumerated() {
             let trackNumber = index + 1
             let markTitle = markTitles[index]
             let fileName = String(format: "%02d - %@.mp3", trackNumber, sanitize(markTitle))
             let destination = staging.appendingPathComponent(fileName)
             finished.append(fileName)
+
+            let expected = ChapterTag(title: markTitle, album: book.title,
+                                      artist: book.author.isEmpty ? "Unbekannt" : book.author,
+                                      track: trackNumber, total: totalCount)
+            if canMove, !item.url.path.hasPrefix(outputDirectory.path),
+               await ChapterAudioTags.readTag(of: item.url, ffprobe: ffprobe) == expected {
+                try fm.moveItem(at: item.url, to: destination)
+                moved.append((from: item.url, to: destination))
+                continue
+            }
 
             onProgress("Kodiere Kapitel \(trackNumber)/\(totalCount): \(markTitle)")
 
@@ -60,6 +80,11 @@ struct MP3ChapterPackager: ChapterPackager {
             ]
             try await FFmpegRunner.run(executable: ffmpeg, arguments: arguments)
         }
+        } catch {
+            undoMoves()
+            throw error
+        }
+        if !moved.isEmpty { onProgress("\(moved.count) Kapitel ohne erneutes Schreiben übernommen (verschoben).") }
 
         // All chapters encoded: replace the old files, then drop old track
         // files this book no longer has (renamed/removed chapters).

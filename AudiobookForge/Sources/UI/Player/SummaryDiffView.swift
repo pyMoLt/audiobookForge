@@ -38,7 +38,7 @@ struct SummaryDiffView: View {
                 }
             }
         }
-        .frame(minWidth: 820, minHeight: 560)
+        .resizableSheet(preferred: CGSize(width: 900, height: 640), floor: CGSize(width: 640, height: 460))
         .background { PaperPage() }
         .task { computeDiff() }
     }
@@ -46,7 +46,7 @@ struct SummaryDiffView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(chapterTitle).font(.system(size: 20, weight: .semibold, design: .serif))
+                Text(chapterTitle).appFont(size: 20, weight: .semibold, design: .serif)
                 Text("\(originalText.count) → \(summaryText.count) Zeichen (\(ratioText))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -80,7 +80,7 @@ struct SummaryDiffView: View {
                 .padding([.horizontal, .top], 22)
             ScrollView {
                 body()
-                    .font(.system(size: 14, design: .serif))
+                    .appFont(size: 14, design: .serif)
                     .lineSpacing(5)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 12)

@@ -262,8 +262,12 @@ final class PipelineIntegrationTests: XCTestCase {
         let attributes = try FileManager.default.attributesOfItem(atPath: m4aURL.path)
         let size = attributes[.size] as? Int ?? 0
         XCTAssertGreaterThan(size, 1000)
+        // v4.4: chapters use the book's AAC bitrate (128 kbit/s by default,
+        // a third of 24 kHz PCM's 384 kbit/s), so bound by that bitrate.
         let rawPCMBytes = result.durationSeconds * 24000 * 2
-        XCTAssertLessThan(Double(size), rawPCMBytes * 0.2, "Chapter file should be compressed, not raw PCM sized")
+        let bitrateShare = Double(settings.aacBitrateKbps) / 384
+        XCTAssertLessThan(Double(size), rawPCMBytes * bitrateShare * 1.1, "Chapter file should be compressed, not raw PCM sized")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ChapterAudioEncoder.stageURL(for: m4aURL).path), "Calm pass must remove its stage")
 
         // No WAV intermediate may remain anywhere in the output directory.
         let leftovers = try FileManager.default.contentsOfDirectory(at: outputDirectory, includingPropertiesForKeys: nil)

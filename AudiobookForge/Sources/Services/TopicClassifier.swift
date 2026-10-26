@@ -99,17 +99,14 @@ enum TopicClassifier {
     /// Loads the keyword lists for a language (falls back to the other
     /// language's list merged in).
     static func keywordLists(languageCode: String?) -> [Topic: KeywordList] {
-        let code = (languageCode ?? "de").lowercased().hasPrefix("en") ? "en" : "de"
-        let de = loadList(resource: "topic_keywords_de") ?? KeywordListData()
-        let en = loadList(resource: "topic_keywords_en") ?? KeywordListData()
+        // Merge every language (v4.1: + French, Spanish, Italian): books
+        // quote terms from other languages; each list carries its own weights.
+        let lists = ["de", "en", "fr", "es", "it"].compactMap { loadList(resource: "topic_keywords_\($0)") }
         var result: [Topic: KeywordList] = [.other: KeywordList(entries: [])]
-        // Merge both languages: German books may quote English terms and
-        // vice versa; each list carries its own weights.
         for topic in Topic.catalog where topic != .other {
-            let merged = (de.entries(for: topic) ?? []) + (en.entries(for: topic) ?? [])
-            result[topic] = KeywordList(entries: merged)
+            result[topic] = KeywordList(entries: lists.flatMap { $0.entries(for: topic) ?? [] })
         }
-        _ = code
+        _ = languageCode
         return result
     }
 

@@ -210,9 +210,8 @@ final class AmbientEngineTests: XCTestCase {
                 ?? Bundle(for: AmbientEngineTests.self).url(forResource: sound.resourceName, withExtension: "m4a") else {
                 // Quellbaum-Fallback für Test-Bundles ohne App-Resourcen.
                 let source = URL(fileURLWithPath: #filePath)
-                    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-                    .deletingLastPathComponent()
-                    .appendingPathComponent("AudiobookForge/AudiobookForge/Resources/Ambient/\(sound.resourceName).m4a")
+                    .deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("AudiobookForge/Resources/Ambient/\(sound.resourceName).m4a")
                 XCTAssertTrue(FileManager.default.fileExists(atPath: source.path), "Asset fehlt: \(sound.resourceName)")
                 try assertValidAsset(source)
                 continue
@@ -395,5 +394,19 @@ final class FolderStoreTests: XCTestCase {
         store.add(name: "Erster")
         store.add(name: "Zweiter")
         XCTAssertEqual(store.folders().map(\.name), ["Erster", "Zweiter"])
+    }
+}
+
+final class DarkModeAccentTextTests: XCTestCase {
+    /// v4.1: accent text on faint tints stays readable on the dark surface.
+    func testEveryAccentReachesAAContrastAsDarkModeText() {
+        let surface = ContrastMath.luminance(red: 0.17, green: 0.17, blue: 0.18)
+        for accent in AppAccent.allCases where accent != .system {
+            let lift = accent.darkModeLift
+            let mix = { (c: Double) in c + (1 - c) * lift }
+            let lum = ContrastMath.luminance(red: mix(accent.rgb.red), green: mix(accent.rgb.green), blue: mix(accent.rgb.blue))
+            XCTAssertGreaterThanOrEqual(ContrastMath.ratio(lum, surface), 4.5, "\(accent)")
+        }
+        XCTAssertGreaterThan(AppAccent.graphite.darkModeLift, 0)
     }
 }

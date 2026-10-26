@@ -38,9 +38,6 @@ public final class StorageReportService: Sendable {
     public func fetchReport(baseDirectory: URL? = nil) async -> [StorageItem] {
         let base = baseDirectory ?? AppPaths.applicationSupportDirectory
         let itemsConfig: [(id: String, name: String, subpath: String, essential: Bool)] = [
-            ("bridge", "Kokoro-Laufzeitumgebung (MLX/Python)", "bridge", true),
-            ("bridge_piper", "Piper-Laufzeitumgebung (Python)", "bridge_piper", true),
-            ("models", "Modelle & Stimmen", "models", false),
             ("chapter_audio", "Zwischengespeichertes Kapitel-Audio", "chapter_audio", false),
             ("logs", "Verarbeitungsprotokolle", "logs", false),
             ("backups", "Sicherungsdateien (Backups)", "backups", false),

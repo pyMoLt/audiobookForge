@@ -6,12 +6,11 @@ import AppKit
 @MainActor
 final class VisualAuditSnapshotTests: XCTestCase {
     private var outputDir: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // VisualAuditSnapshotTests.swift -> AudiobookForgeTests
-            .deletingLastPathComponent() // -> AudiobookForge
-            .deletingLastPathComponent() // -> audiobookSwift
-            .appendingPathComponent("docs", isDirectory: true)
-            .appendingPathComponent("audit_screenshots_aktuell", isDirectory: true)
+        if let custom = ProcessInfo.processInfo.environment["AUDIOBOOKFORGE_SNAPSHOT_DIR"], !custom.isEmpty {
+            return URL(fileURLWithPath: custom, isDirectory: true)
+        }
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("AudiobookForge-Snapshots", isDirectory: true)
     }
 
     private func render<V: View>(
@@ -44,14 +43,18 @@ final class VisualAuditSnapshotTests: XCTestCase {
         bitmapRep.size = size
         hostingView.cacheDisplay(in: hostingView.bounds, to: bitmapRep)
 
-        guard let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
-            XCTFail("Could not create PNG data for \(filename)")
+        let isJPEG = filename.lowercased().hasSuffix(".jpg") || filename.lowercased().hasSuffix(".jpeg")
+        let imgData = isJPEG
+            ? bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.92])
+            : bitmapRep.representation(using: .png, properties: [:])
+        guard let imgData else {
+            XCTFail("Could not create image data for \(filename)")
             return
         }
 
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         let fileURL = outputDir.appendingPathComponent(filename)
-        try pngData.write(to: fileURL)
+        try imgData.write(to: fileURL)
         print("Wrote snapshot: \(fileURL.path)")
     }
 
@@ -208,8 +211,8 @@ final class VisualAuditSnapshotTests: XCTestCase {
         )
         var book = BookProject(
             id: bookID,
-            title: "The Time Machine",
-            author: "Stauber, Weissenbacher et al.",
+            title: "Distributed Systems: Principles and Paradigms",
+            author: "A. S. Tanenbaum, M. van Steen",
             sourceType: .pdf,
             sourceURL: URL(fileURLWithPath: "/tmp/sample.pdf"),
             chapters: [ch1, ch2],
@@ -271,11 +274,12 @@ final class VisualAuditSnapshotTests: XCTestCase {
         let libraryStore = LibraryStore(fileURL: libraryFile)
         let settingsStore = SettingsStore(fileURL: settingsFile)
         let pipelineController = PipelineController(libraryStore: libraryStore, settingsStore: settingsStore)
+        let playback = PlaybackSession()
 
         var b1 = BookProject(
             id: UUID(),
-            title: "The Time Machine",
-            author: "Stauber, Weissenbacher et al.",
+            title: "Distributed Systems: Principles and Paradigms",
+            author: "A. S. Tanenbaum, M. van Steen",
             sourceType: .pdf,
             sourceURL: URL(fileURLWithPath: "/tmp/b1.pdf"),
             chapters: [],
@@ -306,6 +310,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(settingsStore)
             .environment(pipelineController)
+            .environment(playback)
             .frame(width: 280, height: 600)
         try render(sidebarTopic, size: CGSize(width: 280, height: 600), appearance: .aqua, to: "sidebar_grouping_topic.png")
 
@@ -315,6 +320,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(settingsStore)
             .environment(pipelineController)
+            .environment(playback)
             .frame(width: 280, height: 600)
         try render(sidebarDocType, size: CGSize(width: 280, height: 600), appearance: .aqua, to: "sidebar_grouping_doctype.png")
 
@@ -324,6 +330,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(settingsStore)
             .environment(pipelineController)
+            .environment(playback)
             .frame(width: 280, height: 600)
         try render(sidebarAuthor, size: CGSize(width: 280, height: 600), appearance: .aqua, to: "sidebar_grouping_author.png")
 
@@ -333,6 +340,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(settingsStore)
             .environment(pipelineController)
+            .environment(playback)
             .frame(width: 240, height: 600)
         try render(sidebarNarrow, size: CGSize(width: 240, height: 600), appearance: .aqua, to: "sidebar_narrow_240.png")
 
@@ -340,6 +348,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(settingsStore)
             .environment(pipelineController)
+            .environment(playback)
             .frame(width: 400, height: 600)
         try render(sidebarWide, size: CGSize(width: 400, height: 600), appearance: .aqua, to: "sidebar_wide_400.png")
     }
@@ -352,21 +361,22 @@ final class VisualAuditSnapshotTests: XCTestCase {
         let libraryStore = LibraryStore(fileURL: libraryFile)
         let settingsStore = SettingsStore(fileURL: settingsFile)
         let pipelineController = PipelineController(libraryStore: libraryStore, settingsStore: settingsStore)
+        let playback = PlaybackSession()
 
-        // Use sample audio from repo
+        // Use bundled voice sample from repo
         let sampleAudioURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("docs")
-            .appendingPathComponent("hoerproben")
-            .appendingPathComponent("kokoro-de-martin.wav")
+            .appendingPathComponent("AudiobookForge")
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("VoiceSamples")
+            .appendingPathComponent("sample_kokoro_de_martin.m4a")
 
         let bookID = UUID()
         let ch1 = Chapter(
             id: UUID(),
-            title: "Kapitel 1: Der Bau des Zellteilung",
-            groupTitle: "Zellbiologie",
+            title: "Kapitel 1: Einführung in verteilte Systeme",
+            groupTitle: "Grundlagen",
             rawText: "Text...",
             cleanedText: "Text...",
             order: 0,
@@ -377,8 +387,8 @@ final class VisualAuditSnapshotTests: XCTestCase {
         let bookmark = (try? sampleAudioURL.bookmarkData()) ?? Data()
         var book = BookProject(
             id: bookID,
-            title: "The Time Machine",
-            author: "Stauber, Weissenbacher et al.",
+            title: "Distributed Systems: Principles and Paradigms",
+            author: "A. S. Tanenbaum, M. van Steen",
             sourceType: .pdf,
             sourceURL: URL(fileURLWithPath: "/tmp/sample.pdf"),
             chapters: [ch1],
@@ -403,6 +413,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(pipelineController)
             .environment(settingsStore)
+            .environment(playback)
             .frame(width: 950, height: 650)
         try render(playerOff, size: CGSize(width: 950, height: 650), appearance: .aqua, to: "player_ambient_off.png")
 
@@ -414,6 +425,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(pipelineController)
             .environment(settingsStore)
+            .environment(playback)
             .frame(width: 950, height: 650)
         try render(playerFire, size: CGSize(width: 950, height: 650), appearance: .aqua, to: "player_ambient_fire.png")
 
@@ -425,6 +437,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(pipelineController)
             .environment(settingsStore)
+            .environment(playback)
             .frame(width: 950, height: 650)
         try render(playerRain, size: CGSize(width: 950, height: 650), appearance: .darkAqua, to: "player_ambient_rain.png")
 
@@ -436,6 +449,7 @@ final class VisualAuditSnapshotTests: XCTestCase {
             .environment(libraryStore)
             .environment(pipelineController)
             .environment(settingsStore)
+            .environment(playback)
             .frame(width: 950, height: 650)
         try render(playerWater, size: CGSize(width: 950, height: 650), appearance: .aqua, to: "player_ambient_water.png")
     }
@@ -465,5 +479,259 @@ final class VisualAuditSnapshotTests: XCTestCase {
         .environment(settingsStore)
         .frame(width: 480, height: 600)
         try render(narrow, size: CGSize(width: 480, height: 600), appearance: .aqua, to: "settings_appearance_narrow_clipped.png")
+    }
+
+    func testRenderReadmeEnglishScreenshots() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let libraryStore = LibraryStore(fileURL: tempDir.appendingPathComponent("library.json"))
+        let settingsStore = SettingsStore(fileURL: tempDir.appendingPathComponent("settings.json"))
+        settingsStore.settings.appearanceMode = .dark
+        settingsStore.settings.appLanguage = .en
+        settingsStore.settings.accent = .violet
+        settingsStore.settings.omlxBaseURL = "http://127.0.0.1:8000/v1"
+        settingsStore.settings.omlxModel = "Qwen3-30B-A3B-MLX-4bit"
+        let pipelineController = PipelineController(libraryStore: libraryStore, settingsStore: settingsStore)
+        let playback = PlaybackSession()
+        let fun = FunCenter()
+
+        let sampleAudioURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("AudiobookForge")
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("VoiceSamples")
+            .appendingPathComponent("sample_kokoro_af_heart.m4a")
+        let bookmark = (try? sampleAudioURL.bookmarkData()) ?? Data()
+
+        let tmCh1 = Chapter(
+            id: UUID(),
+            title: "Chapter I — Introduction",
+            groupTitle: "Part I: The Time Traveller",
+            rawText: "The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us. His pale grey eyes shone and twinkled, and his usually pale face was flushed and animated. The fire burned brightly, and the soft radiance of the incandescent lights in the lilies of silver caught the bubbles that flashed and passed in our glasses.",
+            cleanedText: "The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us. His pale grey eyes shone and twinkled, and his usually pale face was flushed and animated. The fire burned brightly, and the soft radiance of the incandescent lights in the lilies of silver caught the bubbles that flashed and passed in our glasses.",
+            summarizedText: "The Time Traveller gathers his guests around a bright fireplace to explain how duration is the fourth dimension of space.",
+            order: 0,
+            audioStatus: .ready,
+            audioFileURL: sampleAudioURL,
+            audioDurationSeconds: 1120
+        )
+        let tmCh2 = Chapter(
+            id: UUID(),
+            title: "Chapter II — The Machine",
+            groupTitle: "Part I: The Time Traveller",
+            rawText: "The thing the Time Traveller held in his hand was a glittering metallic framework, scarcely larger than a small clock, and very delicately made. There was ivory in it, and some transparent crystalline substance.",
+            cleanedText: "The thing the Time Traveller held in his hand was a glittering metallic framework, scarcely larger than a small clock, and very delicately made. There was ivory in it, and some transparent crystalline substance.",
+            summarizedText: "He demonstrates a miniature brass and quartz prototype of the Time Machine on the parlour table.",
+            order: 1,
+            audioStatus: .ready,
+            audioFileURL: sampleAudioURL,
+            audioDurationSeconds: 980
+        )
+        let tmCh3 = Chapter(
+            id: UUID(),
+            title: "Chapter III — The Time Traveller Returns",
+            groupTitle: "Part II: The Year 802,701",
+            rawText: "I think that at that time none of us quite believed in the Time Machine. The fact is, the Time Traveller was one of those men who are too clever to be believed.",
+            cleanedText: "I think that at that time none of us quite believed in the Time Machine. The fact is, the Time Traveller was one of those men who are too clever to be believed.",
+            order: 2,
+            audioStatus: .ready,
+            audioFileURL: sampleAudioURL,
+            audioDurationSeconds: 1340
+        )
+        var timeMachine = BookProject(
+            id: UUID(),
+            title: "The Time Machine",
+            author: "H. G. Wells",
+            sourceType: .epub,
+            sourceURL: URL(fileURLWithPath: "/tmp/The_Time_Machine.epub"),
+            chapters: [tmCh1, tmCh2, tmCh3],
+            mode: .transcription,
+            outputFormat: .m4b,
+            voice: "en/Freya",
+            speechSpeed: 1.0
+        )
+        timeMachine.engineID = .phonon
+        timeMachine.status = .completed
+        timeMachine.detectedLanguageCode = "en"
+        timeMachine.topic = "literature"
+        timeMachine.topicOverride = "literature"
+        timeMachine.packagedAudio = PackagedAudioInfo(url: sampleAudioURL, bookmarkData: bookmark, sizeBytes: 48_200_000, verifiedAt: Date())
+
+        var christmasCarol = BookProject(
+            id: UUID(),
+            title: "A Christmas Carol",
+            author: "Charles Dickens",
+            sourceType: .epub,
+            sourceURL: URL(fileURLWithPath: "/tmp/A_Christmas_Carol.epub"),
+            chapters: [
+                Chapter(id: UUID(), title: "Stave I: Marley's Ghost", rawText: "Marley was dead: to begin with.", cleanedText: "Marley was dead: to begin with.", order: 0, audioStatus: .ready, audioDurationSeconds: 2100),
+                Chapter(id: UUID(), title: "Stave II: The First of the Three Spirits", rawText: "When Scrooge awoke, it was so dark...", cleanedText: "When Scrooge awoke, it was so dark...", order: 1, audioStatus: .ready, audioDurationSeconds: 2340)
+            ],
+            mode: .transcription,
+            outputFormat: .m4b,
+            voice: "en/george",
+            speechSpeed: 1.0
+        )
+        christmasCarol.engineID = .pocketTTS
+        christmasCarol.status = .completed
+        christmasCarol.detectedLanguageCode = "en"
+        christmasCarol.topic = "literature"
+        christmasCarol.topicOverride = "literature"
+        christmasCarol.packagedAudio = PackagedAudioInfo(url: sampleAudioURL, bookmarkData: bookmark, sizeBytes: 64_100_000, verifiedAt: Date())
+
+        let dsCh1 = Chapter(
+            id: UUID(),
+            title: "1. Reliable, Scalable, and Maintainable Systems",
+            groupTitle: "Part I: Foundations of Data Systems",
+            rawText: "Many applications today are data-intensive, as opposed to compute-intensive. Raw CPU power is rarely a limiting factor for these applications — bigger problems are usually the amount of data, the complexity of data, and the speed at which it is changing.",
+            cleanedText: "Many applications today are data-intensive, as opposed to compute-intensive. Raw CPU power is rarely a limiting factor for these applications — bigger problems are usually the amount of data, the complexity of data, and the speed at which it is changing.",
+            summarizedText: "Data-intensive architectures prioritize reliability against hardware and human faults, scalability under growing load, and long-term maintainability.",
+            order: 0,
+            audioStatus: .ready,
+            audioDurationSeconds: 840
+        )
+        let dsCh2 = Chapter(
+            id: UUID(),
+            title: "2. Data Models and Query Languages",
+            groupTitle: "Part I: Foundations of Data Systems",
+            rawText: "Data models are perhaps the most important part of developing software, because they have such a profound effect: not only on how the software is written, but also on how we think about the problem that we are solving.",
+            cleanedText: "Data models are perhaps the most important part of developing software, because they have such a profound effect: not only on how the software is written, but also on how we think about the problem that we are solving.",
+            order: 1,
+            audioStatus: .pending
+        )
+        let dsCh3 = Chapter(
+            id: UUID(),
+            title: "3. Storage and Retrieval: B-Trees and LSM-Trees",
+            groupTitle: "Part I: Foundations of Data Systems",
+            rawText: "On the most fundamental level, a database needs to do two things: when you give it some data, it should store the data, and when you ask it again later, it should give the data back to you.",
+            cleanedText: "On the most fundamental level, a database needs to do two things: when you give it some data, it should store the data, and when you ask it again later, it should give the data back to you.",
+            order: 2,
+            audioStatus: .pending
+        )
+        let dsCh4 = Chapter(
+            id: UUID(),
+            title: "5. Replication and Consensus",
+            groupTitle: "Part II: Distributed Data",
+            rawText: "Replication means keeping a copy of the same data on multiple machines that are connected via a network.",
+            cleanedText: "Replication means keeping a copy of the same data on multiple machines that are connected via a network.",
+            order: 3,
+            audioStatus: .pending
+        )
+        var dataSystems = BookProject(
+            id: UUID(),
+            title: "Designing Data-Intensive Systems",
+            author: "M. Kleppmann",
+            sourceType: .pdf,
+            sourceURL: URL(fileURLWithPath: "/tmp/Data_Intensive_Systems.pdf"),
+            chapters: [dsCh1, dsCh2, dsCh3, dsCh4],
+            mode: .summary,
+            outputFormat: .m4b,
+            voice: "af_heart",
+            speechSpeed: 1.0
+        )
+        dataSystems.engineID = .kokoro
+        dataSystems.documentType = .book
+        dataSystems.detectedLanguageCode = "en"
+        dataSystems.topic = "science"
+        dataSystems.topicOverride = "science"
+        dataSystems.status = .needsReview
+
+        var attentionPaper = BookProject(
+            id: UUID(),
+            title: "Attention Is All You Need",
+            author: "Vaswani et al.",
+            sourceType: .pdf,
+            sourceURL: URL(fileURLWithPath: "/tmp/Attention_Is_All_You_Need.pdf"),
+            chapters: [
+                Chapter(id: UUID(), title: "1. Introduction & Background", rawText: "Recurrent neural networks...", cleanedText: "Recurrent neural networks...", order: 0, audioStatus: .ready, audioDurationSeconds: 510),
+                Chapter(id: UUID(), title: "3. Model Architecture — Multi-Head Attention", rawText: "Most competitive neural sequence transduction models...", cleanedText: "Most competitive neural sequence transduction models...", order: 1, audioStatus: .ready, audioDurationSeconds: 690)
+            ],
+            mode: .summary,
+            outputFormat: .m4b,
+            voice: "af_heart",
+            speechSpeed: 1.0
+        )
+        attentionPaper.engineID = .kokoro
+        attentionPaper.documentType = .paper
+        attentionPaper.detectedLanguageCode = "en"
+        attentionPaper.topic = "science"
+        attentionPaper.topicOverride = "science"
+        attentionPaper.status = .completed
+        attentionPaper.packagedAudio = PackagedAudioInfo(url: sampleAudioURL, bookmarkData: bookmark, sizeBytes: 18_400_000, verifiedAt: Date())
+
+        libraryStore.upsert(timeMachine)
+        libraryStore.upsert(christmasCarol)
+        libraryStore.upsert(dataSystems)
+        libraryStore.upsert(attentionPaper)
+
+        let windowSize = CGSize(width: 1280, height: 820)
+
+        func studioFrame<Content: View>(selection: SidebarSelection, ambientScene: AmbientSound? = nil, @ViewBuilder content: () -> Content) -> some View {
+            ZStack {
+                FlowBackground()
+                if let ambientScene {
+                    PixelSceneView(scene: ambientScene, intensity: 0.65, animated: false, contentOffsetX: 0, lastFlash: nil)
+                        .ignoresSafeArea()
+                }
+                HStack(spacing: 0) {
+                    SidebarView(selection: .constant(selection), importingFiles: [], onImport: { _ in })
+                        .frame(width: 280)
+                    content()
+                        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                }
+            }
+            .environment(libraryStore)
+            .environment(settingsStore)
+            .environment(pipelineController)
+            .environment(playback)
+            .environment(fun)
+            .environment(\.locale, Locale(identifier: "en"))
+            .environment(\.colorScheme, .dark)
+            .environment(\.flowAccent, .violet)
+            .frame(width: windowSize.width, height: windowSize.height)
+        }
+
+        // 1. overview.jpg — Main Library / Bookshelf view in English
+        let overviewView = studioFrame(selection: .home) {
+            LibraryHomeView(selection: .constant(.home), importingFiles: [], onImport: { _ in })
+        }
+        try render(overviewView, size: windowSize, appearance: .darkAqua, to: "overview.jpg")
+
+        // 2. voices.jpg — Voice Gallery & TTS Engines in English
+        let voicesView = studioFrame(selection: .settings(.voices)) {
+            VoiceGalleryView(languageCode: "en")
+                .background { PaperPage() }
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+                .padding(.top, 4)
+        }
+        try render(voicesView, size: windowSize, appearance: .darkAqua, to: "voices.jpg")
+
+        // 3. pipeline.jpg — Chapter Review & AI Summarization / Conversion Pipeline
+        let pipelineView = studioFrame(selection: .book(dataSystems.id)) {
+            ReviewView(bookID: dataSystems.id)
+        }
+        try render(pipelineView, size: windowSize, appearance: .darkAqua, to: "pipeline.jpg")
+
+        // 4. player.jpg — Now Playing with Fireplace Ambient Soundscape
+        UserDefaults.standard.set(true, forKey: "player.showChapters")
+        UserDefaults.standard.set(false, forKey: "player.showText")
+        var tmAmbient = timeMachine
+        tmAmbient.ambientSound = "fire"
+        tmAmbient.ambientVolumePercent = 30
+        libraryStore.upsert(tmAmbient)
+        playback.ambient.select(.fire, bookIsPlaying: false)
+        let playerView = studioFrame(selection: .book(tmAmbient.id), ambientScene: .fire) {
+            PlayerView(bookID: tmAmbient.id)
+        }
+        try render(playerView, size: windowSize, appearance: .darkAqua, to: "player.jpg")
+
+        // 5. settings.jpg — Appearance & Flow Design Settings in English
+        let settingsView = studioFrame(selection: .settings(.appearance)) {
+            SettingsView(pane: .appearance)
+        }
+        try render(settingsView, size: windowSize, appearance: .darkAqua, to: "settings.jpg")
     }
 }

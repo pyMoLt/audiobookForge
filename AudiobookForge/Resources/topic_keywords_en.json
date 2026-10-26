@@ -41,7 +41,7 @@
     { "keyword": "density", "weight": 1 },
     { "keyword": "spectrum", "weight": 1 },
     { "keyword": "absorption", "weight": 2 },
-    { "keyword": "proton", "weight": 2 },
+    { "keyword": "nucleon", "weight": 2 },
     { "keyword": "vector", "weight": 2 },
     { "keyword": "function", "weight": 1 },
     { "keyword": "parameter", "weight": 1 }

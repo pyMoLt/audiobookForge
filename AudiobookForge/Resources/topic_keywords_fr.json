@@ -1,0 +1,320 @@
+{
+ "medicine": [
+  {
+   "keyword": "anamnèse",
+   "weight": 3
+  },
+  {
+   "keyword": "diagnostic",
+   "weight": 3
+  },
+  {
+   "keyword": "thérapie",
+   "weight": 3
+  },
+  {
+   "keyword": "traitement",
+   "weight": 2
+  },
+  {
+   "keyword": "patient",
+   "weight": 3
+  },
+  {
+   "keyword": "patiente",
+   "weight": 3
+  },
+  {
+   "keyword": "clinique",
+   "weight": 2
+  },
+  {
+   "keyword": "pathologie",
+   "weight": 3
+  },
+  {
+   "keyword": "physiopathologie",
+   "weight": 3
+  },
+  {
+   "keyword": "syndrome",
+   "weight": 2
+  },
+  {
+   "keyword": "symptôme",
+   "weight": 2
+  },
+  {
+   "keyword": "médecin",
+   "weight": 2
+  },
+  {
+   "keyword": "hôpital",
+   "weight": 2
+  },
+  {
+   "keyword": "médicament",
+   "weight": 2
+  },
+  {
+   "keyword": "antibiotique",
+   "weight": 2
+  },
+  {
+   "keyword": "posologie",
+   "weight": 2
+  },
+  {
+   "keyword": "vaccin",
+   "weight": 2
+  },
+  {
+   "keyword": "anatomie",
+   "weight": 2
+  },
+  {
+   "keyword": "physiologie",
+   "weight": 2
+  },
+  {
+   "keyword": "chirurgie",
+   "weight": 2
+  },
+  {
+   "keyword": "inflammation",
+   "weight": 2
+  },
+  {
+   "keyword": "pharmacologie",
+   "weight": 3
+  }
+ ],
+ "science": [
+  {
+   "keyword": "expérience",
+   "weight": 2
+  },
+  {
+   "keyword": "hypothèse",
+   "weight": 2
+  },
+  {
+   "keyword": "théorie",
+   "weight": 2
+  },
+  {
+   "keyword": "équation",
+   "weight": 3
+  },
+  {
+   "keyword": "molécule",
+   "weight": 2
+  },
+  {
+   "keyword": "atome",
+   "weight": 2
+  },
+  {
+   "keyword": "énergie",
+   "weight": 1
+  },
+  {
+   "keyword": "algorithme",
+   "weight": 3
+  },
+  {
+   "keyword": "données",
+   "weight": 1
+  },
+  {
+   "keyword": "physique",
+   "weight": 2
+  },
+  {
+   "keyword": "chimie",
+   "weight": 2
+  },
+  {
+   "keyword": "biologie",
+   "weight": 2
+  },
+  {
+   "keyword": "mesure",
+   "weight": 1
+  },
+  {
+   "keyword": "laboratoire",
+   "weight": 2
+  },
+  {
+   "keyword": "ingénierie",
+   "weight": 2
+  },
+  {
+   "keyword": "électron",
+   "weight": 2
+  },
+  {
+   "keyword": "protéine",
+   "weight": 2
+  }
+ ],
+ "literature": [
+  {
+   "keyword": "dit-il",
+   "weight": 3
+  },
+  {
+   "keyword": "dit-elle",
+   "weight": 3
+  },
+  {
+   "keyword": "murmura",
+   "weight": 2
+  },
+  {
+   "keyword": "chapitre premier",
+   "weight": 2
+  },
+  {
+   "keyword": "roman",
+   "weight": 2
+  },
+  {
+   "keyword": "narrateur",
+   "weight": 2
+  },
+  {
+   "keyword": "village",
+   "weight": 1
+  },
+  {
+   "keyword": "sourit",
+   "weight": 2
+  },
+  {
+   "keyword": "regard",
+   "weight": 1
+  },
+  {
+   "keyword": "rêve",
+   "weight": 1
+  },
+  {
+   "keyword": "nuit",
+   "weight": 1
+  },
+  {
+   "keyword": "amour",
+   "weight": 1
+  }
+ ],
+ "history": [
+  {
+   "keyword": "siècle",
+   "weight": 2
+  },
+  {
+   "keyword": "guerre",
+   "weight": 2
+  },
+  {
+   "keyword": "empire",
+   "weight": 2
+  },
+  {
+   "keyword": "révolution",
+   "weight": 2
+  },
+  {
+   "keyword": "roi",
+   "weight": 2
+  },
+  {
+   "keyword": "règne",
+   "weight": 2
+  },
+  {
+   "keyword": "traité",
+   "weight": 2
+  },
+  {
+   "keyword": "dynastie",
+   "weight": 3
+  },
+  {
+   "keyword": "bataille",
+   "weight": 2
+  },
+  {
+   "keyword": "société",
+   "weight": 1
+  },
+  {
+   "keyword": "politique",
+   "weight": 1
+  },
+  {
+   "keyword": "colonie",
+   "weight": 2
+  },
+  {
+   "keyword": "historien",
+   "weight": 2
+  }
+ ],
+ "economy": [
+  {
+   "keyword": "marché",
+   "weight": 2
+  },
+  {
+   "keyword": "entreprise",
+   "weight": 2
+  },
+  {
+   "keyword": "bilan",
+   "weight": 3
+  },
+  {
+   "keyword": "chiffre d'affaires",
+   "weight": 3
+  },
+  {
+   "keyword": "contrat",
+   "weight": 2
+  },
+  {
+   "keyword": "tribunal",
+   "weight": 2
+  },
+  {
+   "keyword": "article",
+   "weight": 1
+  },
+  {
+   "keyword": "loi",
+   "weight": 2
+  },
+  {
+   "keyword": "droit",
+   "weight": 2
+  },
+  {
+   "keyword": "fiscal",
+   "weight": 2
+  },
+  {
+   "keyword": "investissement",
+   "weight": 2
+  },
+  {
+   "keyword": "actionnaire",
+   "weight": 3
+  },
+  {
+   "keyword": "inflation",
+   "weight": 2
+  }
+ ]
+}

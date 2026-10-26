@@ -41,7 +41,7 @@ struct PromptsSettingsTabView: View {
             Text(L(title)).flowFont(.body, weight: .semibold)
             Text(L(note)).flowFont(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             TextEditor(text: text)
-                .font(.system(size: 12, design: .monospaced))
+                .appFont(size: 12, design: .monospaced)
                 .scrollContentBackground(.hidden)
                 .padding(10)
                 .frame(minHeight: height)

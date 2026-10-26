@@ -816,7 +816,7 @@ private struct MiniPlayerPlayButton: View {
             coordinator.togglePlayPause()
         } label: {
             Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 13, weight: .bold))
+                .appFont(size: 13, weight: .bold)
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }

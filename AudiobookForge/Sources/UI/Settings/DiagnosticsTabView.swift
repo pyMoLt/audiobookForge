@@ -9,10 +9,6 @@ struct DiagnosticsTabView: View {
     private let supertonic = SupertonicEnvironmentManager.shared
 
     @State private var statuses: [DependencyStatus] = []
-    @State private var isRunningSetup = false
-    @State private var setupLog: [String] = []
-    @State private var isRunningPiperSetup = false
-    @State private var piperSetupLog: [String] = []
     @State private var isChecking = false
     @State private var storageItems: [StorageItem] = []
     @State private var isCalculatingStorage = false
@@ -32,7 +28,7 @@ struct DiagnosticsTabView: View {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: icon(for: status))
                                 .foregroundStyle(color(for: status))
-                                .font(.system(size: 16))
+                                .appFont(size: 16)
                                 .frame(width: 22)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(status.name).flowFont(.body, weight: .medium)
@@ -66,13 +62,13 @@ struct DiagnosticsTabView: View {
                 .flowSurface(cornerRadius: Theme.Radius.card)
             }
 
-            PillSection("Speicher-Übersicht & Aufräumen") {
+            PillSection("Zwischenspeicher & Aufräumen", footer: "Engines, Modelle und Stimmen entfernst du unter Engines & Downloads.") {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(storageItems) { item in
                         HStack(alignment: .center, spacing: 12) {
                             Image(systemName: item.isEssential ? "shippingbox.fill" : "archivebox")
                                 .foregroundStyle(item.isEssential ? Color.secondary : Color.accentColor)
-                                .font(.system(size: 16))
+                                .appFont(size: 16)
                                 .frame(width: 22)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name).flowFont(.body, weight: .medium)
@@ -123,17 +119,12 @@ struct DiagnosticsTabView: View {
                 .flowSurface(cornerRadius: Theme.Radius.card)
             }
 
-            setupCard(
-                title: "Kokoro einrichten",
-                note: String(localized: "Eigene Python-Umgebung unter \((bridge.bridgeDirectory.path as NSString).abbreviatingWithTildeInPath) mit mlx-audio, misaki und soundfile. Beim ersten Vorlesen kommen die Modellgewichte (~300 MB) dazu."),
-                isRunning: isRunningSetup, log: setupLog, action: runSetup)
-
-            setupCard(
-                title: "Piper einrichten",
-                note: String(localized: "Schlanke Python-Umgebung unter \((piper.directory.path as NSString).abbreviatingWithTildeInPath) mit piper-tts. Stimmen werden einzeln unter „Engines & Downloads“ geladen."),
-                isRunning: isRunningPiperSetup, log: piperSetupLog, action: runPiperSetup)
-
-            PillSection("Pfade") {
+            PillSection("Pfade & Quellen") {
+                PillRow(title: "Kokoro-Modell (Hugging Face)", subtitle: "Repository für das MLX-Modell von Kokoro (Standard: mlx-community/Kokoro-82M-bf16).") {
+                    TextField("Repo", text: $store.settings.kokoroModelRepo)
+                        .textFieldStyle(.flow)
+                        .frame(width: 280)
+                }
                 PillRow(title: "ffmpeg", subtitle: "Leer = automatisch suchen") {
                     TextField("/opt/homebrew/bin/ffmpeg", text: $store.settings.dependencyPathOverrides.ffmpegPath)
                         .textFieldStyle(.flow)
@@ -161,7 +152,7 @@ struct DiagnosticsTabView: View {
             }
             Button("Abbrechen", role: .cancel) { itemToClean = nil }
         } message: {
-            Text("Dateien in diesem Cache-Ordner werden gelöscht. Bei Laufzeitumgebungen müssen die Pakete beim nächsten Mal neu geladen werden.")
+            Text("Dateien in diesem Ordner werden gelöscht.")
         }
         .confirmationDialog(
             "Alle temporären Caches leeren?",
@@ -195,40 +186,6 @@ struct DiagnosticsTabView: View {
     }
 
 
-    private func setupCard(title: String, note: String, isRunning: Bool, log: [String], action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(L(title)).flowFont(.body, weight: .semibold)
-                Spacer()
-                Button(action: action) {
-                    if isRunning {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Einrichten / reparieren", systemImage: "wrench.and.screwdriver")
-                    }
-                }
-                .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                .disabled(isRunning)
-            }
-            Text(note).flowFont(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if !log.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(log.enumerated()), id: \.offset) { _, line in
-                            Text(line).font(.system(size: 11, design: .monospaced))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(height: 150)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05)))
-            }
-        }
-        .padding(18)
-        .flowSurface(cornerRadius: Theme.Radius.row)
-    }
-
     private func refreshStatuses() {
         guard !isChecking else { return }
         isChecking = true
@@ -256,53 +213,9 @@ struct DiagnosticsTabView: View {
         }
     }
 
-    private func runPiperSetup() {
-        isRunningPiperSetup = true
-        piperSetupLog = []
-        Task {
-            do {
-                try await piper.runSetup { line in
-                    Task { @MainActor in piperSetupLog.append(line) }
-                }
-                await MainActor.run {
-                    isRunningPiperSetup = false
-                    refreshStatuses()
-                }
-            } catch {
-                await MainActor.run {
-                    piperSetupLog.append("FEHLER: \(error.localizedDescription)")
-                    isRunningPiperSetup = false
-                }
-            }
-        }
-    }
-
     private func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-    }
-
-    private func runSetup() {
-        isRunningSetup = true
-        setupLog = []
-        Task {
-            do {
-                try await bridge.runSetup { line in
-                    Task { @MainActor in
-                        setupLog.append(line)
-                    }
-                }
-                await MainActor.run {
-                    isRunningSetup = false
-                    refreshStatuses()
-                }
-            } catch {
-                await MainActor.run {
-                    setupLog.append("FEHLER: \(error.localizedDescription)")
-                    isRunningSetup = false
-                }
-            }
-        }
     }
 
     private func icon(for status: DependencyStatus) -> String {

@@ -5,6 +5,8 @@ import Foundation
 @MainActor
 final class ChristmasCarolResynthesisTests: XCTestCase {
     func testResynthesizeChapters2And7WithWatchdog() async throws {
+        // Repair tool for a book in the REAL library — opt-in only.
+        try LiveTestGate.require("Reparatur-Test an der echten Bibliothek")
         let bookID = UUID(uuidString: "D4498694-419F-4EB7-9EF5-4B01CE083D8C")!
         let libraryStore = LibraryStore()
         guard let initialBook = libraryStore.book(id: bookID) else {
@@ -12,7 +14,8 @@ final class ChristmasCarolResynthesisTests: XCTestCase {
             return
         }
 
-        let settingsStore = SettingsStore()
+        // Never the user's settings.json.
+        let settingsStore = SettingsStore(fileURL: try LiveTestGate.scratchDirectory("christmas").appendingPathComponent("settings.json"))
         settingsStore.settings.ttsParallelWorkers = 1
         settingsStore.settings.ttsEngine = .kokoro
         settingsStore.settings.kokoroVoice = "af_heart"

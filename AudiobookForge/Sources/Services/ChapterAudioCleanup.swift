@@ -109,10 +109,16 @@ enum ChapterAudioCleanup {
         var messages: [String] = []
         let ordered = chapterAudioFiles.sorted { $0.chapter.order < $1.chapter.order }
 
+        // Same names as the packager (mark titles, "Gruppe — Titel"), and the
+        // chapter's known duration: since v4.1 the source file may have been
+        // moved into the output folder rather than copied.
+        let markTitles = ChapterNaming.markTitles(for: ordered.map(\.chapter))
         var allVerified = !ordered.isEmpty
         for (fileIndex, item) in ordered.enumerated() {
-            let expected = (try? await WaveFileInspector.durationSeconds(url: item.url)) ?? 0
-            let fileName = String(format: "%02d - %@.mp3", fileIndex + 1, sanitize(item.chapter.title))
+            let measured: Double? = FileManager.default.fileExists(atPath: item.url.path)
+                ? try? await WaveFileInspector.durationSeconds(url: item.url) : nil
+            let expected = item.chapter.audioDurationSeconds ?? measured ?? 0
+            let fileName = String(format: "%02d - %@.mp3", fileIndex + 1, sanitize(markTitles[fileIndex]))
             let exported = outputDirectory.appendingPathComponent(fileName)
             let readable = FileManager.default.isReadableFile(atPath: exported.path)
             let durationOK = await PackagedAudioVerifier.verifyChapterFile(url: exported, expectedDurationSeconds: expected)
@@ -133,7 +139,7 @@ enum ChapterAudioCleanup {
 
         let freed = ChapterAudioStore.chapterAudioSizeBytes(bookID: book.id, root: chapterAudioRoot)
         for (fileIndex, item) in ordered.enumerated() {
-            let fileName = String(format: "%02d - %@.mp3", fileIndex + 1, sanitize(item.chapter.title))
+            let fileName = String(format: "%02d - %@.mp3", fileIndex + 1, sanitize(markTitles[fileIndex]))
             let exported = outputDirectory.appendingPathComponent(fileName)
             guard let index = book.chapters.firstIndex(where: { $0.id == item.chapter.id }) else { continue }
             book.chapters[index].audioFileURL = exported
@@ -163,31 +169,46 @@ enum ChapterAudioCleanup {
             guard savings > 0 else { continue }
             guard let packagedURL = book.packagedAudio?.url ?? ChapterAudioMigrationOffer.packagedOutputURL(for: book) else { continue }
 
-            let files: [ChapterAudioFile] = book.chapters.compactMap { ch in
-                if let url = ch.audioFileURL, FileManager.default.fileExists(atPath: url.path) {
-                    return ChapterAudioFile(chapter: ch, url: url)
-                }
-                let fallback = ChapterAudioStore.chapterFileURL(bookID: book.id, order: ch.order, format: book.outputFormat, root: chapterAudioRoot)
-                if FileManager.default.fileExists(atPath: fallback.path) {
-                    return ChapterAudioFile(chapter: ch, url: fallback)
-                }
-                return nil
-            }
-            guard files.count == book.chapters.count else { continue }
-
-            let result = await finalizeSingleFile(
-                book: book,
-                packagedURL: packagedURL,
-                chapterAudioFiles: files,
-                ffmpeg: ffmpeg,
-                keepChapterAudio: false,
-                chapterAudioRoot: chapterAudioRoot
-            )
+            guard let result = await releaseChapterAudio(book: book, packagedURL: packagedURL, ffmpeg: ffmpeg,
+                                                         chapterAudioRoot: chapterAudioRoot) else { continue }
             if result.verified {
                 await MainActor.run {
                     libraryStore.upsert(result.book)
                 }
             }
         }
+    }
+
+    /// One book: verify `packagedURL` against the chapter audio, link the
+    /// book to it and delete `chapter_audio/<id>` (v4: also used when the
+    /// user re-assigns a moved M4B). nil when not every chapter's audio is
+    /// on disk; a failed verification deletes nothing.
+    static func releaseChapterAudio(
+        book: BookProject,
+        packagedURL: URL,
+        ffmpeg: URL,
+        chapterAudioRoot: URL
+    ) async -> Result? {
+        let files: [ChapterAudioFile] = book.chapters.compactMap { ch in
+            if let url = ch.audioFileURL, FileManager.default.fileExists(atPath: url.path) {
+                return ChapterAudioFile(chapter: ch, url: url)
+            }
+            let fallback = ChapterAudioStore.chapterFileURL(bookID: book.id, order: ch.order, format: book.outputFormat, root: chapterAudioRoot)
+            if FileManager.default.fileExists(atPath: fallback.path) {
+                return ChapterAudioFile(chapter: ch, url: fallback)
+            }
+            return nil
+        }
+        guard files.count == book.chapters.count else { return nil }
+        var result = await finalizeSingleFile(
+            book: book,
+            packagedURL: packagedURL,
+            chapterAudioFiles: files,
+            ffmpeg: ffmpeg,
+            keepChapterAudio: false,
+            chapterAudioRoot: chapterAudioRoot
+        )
+        if result.verified { result.book.outputDirectoryURL = packagedURL.deletingLastPathComponent() }
+        return result
     }
 }

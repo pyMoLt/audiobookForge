@@ -22,7 +22,7 @@ struct ImportDropZone: View {
                     .shadow(color: Color.orange.opacity(0.3), radius: 12, x: 0, y: 6)
 
                 Image(systemName: "arrow.down.doc.fill")
-                    .font(.system(size: 34, weight: .semibold))
+                    .appFont(size: 34, weight: .semibold)
                     .foregroundStyle(.white)
             }
             .padding(.top, 8)

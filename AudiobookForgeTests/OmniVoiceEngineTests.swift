@@ -49,9 +49,7 @@ final class OmniVoiceEngineTests: XCTestCase {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("AudiobookForge/AudiobookForge/Resources/Bridge/omnivoice_bridge.py")
+            .appendingPathComponent("AudiobookForge/Resources/Bridge/omnivoice_bridge.py")
         let url = candidates.compactMap({ $0 }).first ?? sourceURL
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "Bridge-Skript existiert")
 

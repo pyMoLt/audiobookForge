@@ -8,7 +8,7 @@
 # Budget: all samples together ≤ 8 MB (checked by VoiceSampleBudgetTests).
 set -euo pipefail
 SRC="${1:?Usage: build_voice_samples.sh <dir with voice_samples.json and sample_*.m4a>}"
-DEST="$(cd "$(dirname "$0")/.." && pwd)/AudiobookForge/AudiobookForge/Resources/VoiceSamples"
+DEST="$(cd "$(dirname "$0")/.." && pwd)/AudiobookForge/Resources/VoiceSamples"
 mkdir -p "$DEST"
 rm -f "$DEST"/sample_*.m4a
 cp "$SRC"/sample_*.m4a "$DEST"/

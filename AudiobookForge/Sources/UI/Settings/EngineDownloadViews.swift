@@ -97,244 +97,296 @@ struct HuggingFaceAccountCard: View {
 
 extension Notification.Name {
     static let huggingFaceAccountChanged = Notification.Name("AudiobookForge.huggingFaceAccountChanged")
+    /// Something was installed or removed (v4.2): inventories and the gallery refresh.
+    static let engineInventoryChanged = Notification.Name("AudiobookForge.engineInventoryChanged")
 }
 
-// MARK: - Gated model row
+// MARK: - Running components
 
-/// One downloadable, gated language model: access state, size, install /
-/// remove, progress.
-struct GatedModelRow: View {
-    let title: String
-    let detail: String
-    let repo: String
-    let isInstalled: () -> Bool
-    let install: (@escaping @Sendable (String) -> Void) async throws -> Void
-    let remove: () throws -> Void
+/// Runs install steps and turns their output into one short status line.
+enum ComponentRunner {
+    static func statusLine(_ line: String) -> String? {
+        if line.hasPrefix("PROGRESS "), let fraction = Double(line.dropFirst(9).trimmingCharacters(in: .whitespaces)) {
+            return String(format: L("Lädt … %d %%"), Int(fraction * 100))
+        }
+        let text = line.hasPrefix("STEP ") ? String(line.dropFirst(5)) : line
+        return text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : String(text.prefix(140))
+    }
 
-    @State private var installed = false
-    @State private var access: HuggingFaceAccount.AccessState?
-    @State private var working = false
-    @State private var message: String?
+    @MainActor
+    static func install(_ components: [EngineComponent], onStatus: @escaping @MainActor (Int, String) -> Void) async throws {
+        for (index, component) in components.enumerated() {
+            guard let install = component.install else { continue }
+            onStatus(index, component.title)
+            // Each step up to three times (v4.2): downloads resume where they stopped.
+            for attempt in 1...NetworkPolicy.attempts {
+                do {
+                    try await install { line in
+                        guard let text = statusLine(line) else { return }
+                        Task { @MainActor in onStatus(index, text) }
+                    }
+                    break
+                } catch {
+                    guard attempt < NetworkPolicy.attempts, NetworkPolicy.isRetryable(error) else { throw error }
+                    onStatus(index, String(format: L("Verbindung unterbrochen — neuer Versuch (%d/%d) …"), attempt + 1, NetworkPolicy.attempts))
+                    try await Task.sleep(for: .seconds(3 * attempt))
+                }
+            }
+        }
+        NotificationCenter.default.post(name: .engineInventoryChanged, object: nil)
+    }
+
+    @MainActor
+    static func remove(_ component: EngineComponent) async throws {
+        guard let remove = component.remove else { return }
+        try await Task.detached(priority: .userInitiated) { try remove() }.value
+        NotificationCenter.default.post(name: .engineInventoryChanged, object: nil)
+    }
+}
+
+// MARK: - Engines & Downloads (v4.2)
+
+/// Every engine at a glance: installed or not, runtime version, space used,
+/// and — expanded — each piece (runtime, language models, voices) to load
+/// or remove. Voices are best added from the gallery, where they can be
+/// heard first; this is the place to see what is there and free space.
+struct EngineInventoryList: View {
+    @Environment(SettingsStore.self) private var settingsStore
+    @State private var statuses: [EngineStatus] = []
+    @State private var expanded: Set<TTSEngineID> = []
+    @State private var refreshToken = 0
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: title).flowFont(.callout, weight: .medium)
-                Text(verbatim: message ?? detail).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+        VStack(alignment: .leading, spacing: 10) {
+            if statuses.isEmpty {
+                ProgressView().controlSize(.small).padding(18)
             }
-            Spacer(minLength: 8)
-            if installed {
-                StatusBadge(text: L("Bereit"), systemImage: "checkmark.circle.fill", tint: .green)
-                Button("Entfernen") { delete() }
-                    .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
-            } else if working {
-                ProgressView().controlSize(.small)
-            } else if access == .termsRequired || access == .signedOut {
-                Button(access == .signedOut ? L("Anmelden nötig") : L("Lizenz akzeptieren")) {
-                    NSWorkspace.shared.open(HuggingFaceAccount.modelPageURL(repo))
+            ForEach(statuses) { status in
+                EngineInventoryCard(status: status, isExpanded: Binding(
+                    get: { expanded.contains(status.engine) },
+                    set: { if $0 { expanded.insert(status.engine) } else { expanded.remove(status.engine) } }
+                ), allStatuses: statuses)
+            }
+        }
+        .task(id: refreshToken) {
+            let settings = settingsStore.settings
+            statuses = await Task.detached(priority: .utility) { EngineInventory.all(settings: settings) }.value
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .engineInventoryChanged)) { _ in refreshToken += 1 }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+            guard let list = (note.userInfo as? [String: String])?["expandEngines"] else { return }
+            expanded = Set(list.split(separator: ",").compactMap { TTSEngineID(rawValue: String($0)) })
+        }
+        #endif
+    }
+}
+
+private struct EngineInventoryCard: View {
+    let status: EngineStatus
+    @Binding var isExpanded: Bool
+    let allStatuses: [EngineStatus]
+    @State private var working = false
+    @State private var message: String?
+    @State private var confirmRemoveAll = false
+
+    private var runtime: EngineComponent? { status.components.first { $0.kind == .runtime } }
+    /// Pieces only this engine uses (the shared MLX runtime stays).
+    private var ownInstalled: [EngineComponent] { status.components.filter { $0.installed && $0.sharedBy.isEmpty && $0.remove != nil } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: status.isReady ? "checkmark.circle.fill" : "circle.dashed")
+                    .foregroundStyle(status.isReady ? .green : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: status.engine.shortName).flowFont(.callout, weight: .semibold)
+                    Text(verbatim: message ?? summary).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
-                .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
-                Button("Laden") { start() }
-                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-            } else {
-                Button("Laden") { start() }
-                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+                Spacer(minLength: 8)
+                if working {
+                    ProgressView().controlSize(.small)
+                } else if let runtime, !runtime.installed, runtime.install != nil {
+                    Button("Einrichten") { setUp(runtime) }
+                        .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+                }
+                if !status.components.isEmpty {
+                    Button {
+                        withAnimation(.snappy) { isExpanded.toggle() }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(isExpanded ? L("Einklappen") : L("Bestandteile zeigen"))
+                }
+            }
+            if isExpanded {
+                Label(status.engine.license, systemImage: "doc.text")
+                    .flowFont(.caption).foregroundStyle(.secondary)
+                ForEach(status.components) { component in
+                    EngineComponentRow(component: component, sharedWithInstalled: sharedWith(component))
+                }
+                if !ownInstalled.isEmpty {
+                    Button(role: .destructive) { confirmRemoveAll = true } label: {
+                        Label(String(format: L("Alles von %@ entfernen"), status.engine.shortName), systemImage: "trash")
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
+                    .disabled(working)
+                }
             }
         }
-        .task { await refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: .huggingFaceAccountChanged)) { _ in
-            Task { await refresh() }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .flowSurface(cornerRadius: Theme.Radius.row)
+        .confirmationDialog(String(format: L("Alles von %@ entfernen?"), status.engine.shortName), isPresented: $confirmRemoveAll) {
+            Button(String(format: L("%@ freigeben"), ByteCountFormatter.string(fromByteCount: ownInstalled.reduce(0) { $0 + $1.sizeBytes }, countStyle: .file)), role: .destructive) { removeAll() }
+        } message: {
+            Text(String(format: L("Entfernt %@. Bücher mit diesen Stimmen lassen sich danach erst wieder vertonen, wenn du sie neu lädst."),
+                        ownInstalled.map(\.title).joined(separator: ", ")))
         }
     }
 
-    private func refresh() async {
-        installed = isInstalled()
-        if !installed { access = await HuggingFaceAccount.access(to: repo) }
+    private var summary: String {
+        var parts: [String] = []
+        if let version = status.version { parts.append(L("Version") + " " + version) }
+        if status.engine == .appleSystem {
+            parts.append(String(format: L("%d Systemstimmen"), AppleSpeechEngine.installedVoices().count))
+        } else if !status.components.contains(where: { $0.installed && $0.sharedBy.isEmpty }) {
+            parts.append(L("Nicht installiert"))
+        } else {
+            parts.append(ByteCountFormatter.string(fromByteCount: status.installedBytes, countStyle: .file)
+                         + (status.usesSharedRuntime ? " " + L("+ geteilte MLX-Laufzeit") : ""))
+            let payload = status.components.filter { $0.kind == .model || $0.kind == .voice }
+            if !payload.isEmpty {
+                parts.append(String(format: L("%d von %d geladen"), payload.filter(\.installed).count, payload.count))
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 
-    private func start() {
+    /// Other engines that are set up and need this shared piece.
+    private func sharedWith(_ component: EngineComponent) -> [TTSEngineID] {
+        component.sharedBy.filter { engine in
+            engine != status.engine && allStatuses.first { $0.engine == engine }?.components.contains { $0.installed && $0.kind != .runtime } == true
+        }
+    }
+
+    private func setUp(_ runtime: EngineComponent) {
         working = true
-        message = L("Starte Download …")
         Task {
             do {
-                try await install { line in
-                    let text = line.hasPrefix("STEP ") ? String(line.dropFirst(5)) : line
-                    guard !line.hasPrefix("PROGRESS ") else { return }
-                    Task { @MainActor in message = text }
-                }
+                try await ComponentRunner.install([runtime]) { _, text in message = text }
                 message = nil
             } catch {
                 message = error.localizedDescription
             }
             working = false
-            await refresh()
         }
     }
 
-    private func delete() {
-        do { try remove(); message = L("Entfernt.") } catch { message = error.localizedDescription }
-        installed = isInstalled()
-    }
-}
-
-// MARK: - Phonon
-
-struct PhononModelsCard: View {
-    private let environment = PhononEnvironmentManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Phonon — Sprachmodelle").flowFont(.body, weight: .medium)
-            ForEach(PhononEnvironmentManager.languages, id: \.self) { language in
-                let voices = PhononVoice.catalog.filter { $0.language == language }.count
-                GatedModelRow(
-                    title: languageDisplayName(language),
-                    detail: String(format: L("Phonon 40m · ~78 MB · %d Stimmen · CC BY-NC 4.0"), voices),
-                    repo: PhononEnvironmentManager.repo(for: language),
-                    isInstalled: { environment.isReady(language: language) },
-                    install: { onLine in try await environment.installModel(language, onOutput: onLine) },
-                    remove: { try environment.removeModel(language) }
-                )
+    private func removeAll() {
+        working = true
+        Task {
+            for component in ownInstalled {
+                do { try await ComponentRunner.remove(component) } catch { message = error.localizedDescription }
             }
+            working = false
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .flowSurface(cornerRadius: Theme.Radius.row)
     }
 }
 
-// MARK: - Pocket TTS
-
-struct PocketModelsCard: View {
-    private let environment = PocketEnvironmentManager.shared
+/// One piece: size, state, load (with the Hugging Face sign-in where the
+/// model is gated) or remove.
+private struct EngineComponentRow: View {
+    let component: EngineComponent
+    let sharedWithInstalled: [TTSEngineID]
+    @State private var working = false
+    @State private var message: String?
+    @State private var access: HuggingFaceAccount.AccessState?
+    @State private var confirmRemove = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pocket TTS — Sprachmodelle").flowFont(.body, weight: .medium)
-            ForEach(PocketEnvironmentManager.languages, id: \.self) { language in
-                ForEach([false, true], id: \.self) { high in
-                    GatedModelRow(
-                        title: languageDisplayName(language) + (high ? " · " + L("Hohe Qualität (24 Schichten)") : ""),
-                        detail: high ? L("~700 MB · langsamer, natürlicher · CC BY 4.0") : L("~220 MB · schnell · CC BY 4.0"),
-                        repo: PocketEnvironmentManager.repo,
-                        isInstalled: { environment.isReady(language: language, highQuality: high) },
-                        install: { onLine in try await environment.installModel(language, highQuality: high, onOutput: onLine) },
-                        remove: { try environment.removeModel(language, highQuality: high) }
-                    )
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(component.installed ? Color.green : Color.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: component.title).flowFont(.callout)
+                Text(verbatim: message ?? detail).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            if working {
+                ProgressView().controlSize(.small)
+            } else if component.installed {
+                if component.remove != nil {
+                    Button("Entfernen") { confirmRemove = true }
+                        .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                 }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .flowSurface(cornerRadius: Theme.Radius.row)
-    }
-}
-
-// MARK: - Overview
-
-/// Every engine at a glance (v4): installed or not, what is still missing,
-/// and the one-click runtime setup where an engine needs one. Models and
-/// voices follow in the engine sections below.
-struct EngineOverviewCard: View {
-    private struct Row: Identifiable, Sendable {
-        let id: TTSEngineID
-        let ready: Bool
-        let detail: String
-        let setup: (@Sendable (@escaping @Sendable (String) -> Void) async throws -> Void)?
-    }
-
-    @State private var rows: [Row] = []
-    @State private var working: TTSEngineID?
-    @State private var message: [TTSEngineID: String] = [:]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(rows) { row in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: row.ready ? "checkmark.circle.fill" : "circle.dashed")
-                        .foregroundStyle(row.ready ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: row.id.shortName).flowFont(.callout, weight: .medium)
-                        Text(verbatim: message[row.id] ?? row.detail).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+            } else if component.install != nil {
+                if let repo = component.gatedRepo, access == .signedOut || access == .termsRequired {
+                    Button(access == .signedOut ? L("Anmelden nötig") : L("Lizenz akzeptieren")) {
+                        NSWorkspace.shared.open(HuggingFaceAccount.modelPageURL(repo))
                     }
-                    Spacer(minLength: 8)
-                    if working == row.id {
-                        ProgressView().controlSize(.small)
-                    } else if !row.ready, let setup = row.setup {
-                        Button("Einrichten") { run(row.id, setup) }
-                            .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                            .disabled(working != nil)
-                    }
+                    .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
                 }
+                Button("Laden") { install() }
+                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .flowSurface(cornerRadius: Theme.Radius.row)
-        .task { await refresh() }
+        .padding(.leading, 6)
+        .task(id: component.installed) {
+            if !component.installed, let repo = component.gatedRepo { access = await HuggingFaceAccount.access(to: repo) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .huggingFaceAccountChanged)) { _ in
+            Task { if let repo = component.gatedRepo { access = await HuggingFaceAccount.access(to: repo) } }
+        }
+        .confirmationDialog(String(format: L("„%@“ entfernen?"), component.title), isPresented: $confirmRemove) {
+            Button(String(format: L("%@ freigeben"), component.sizeText), role: .destructive) { remove() }
+        } message: {
+            if !sharedWithInstalled.isEmpty {
+                Text(String(format: L("Wird auch von %@ gebraucht — diese Engines funktionieren danach erst wieder nach dem Einrichten."),
+                            sharedWithInstalled.map(\.shortName).joined(separator: ", ")))
+            }
+        }
     }
 
-    private func refresh() async {
-        rows = await Task.detached(priority: .utility) { Self.probe() }.value
+    private var icon: String {
+        switch component.kind {
+        case .runtime: return "shippingbox"
+        case .model: return "cube"
+        case .voice: return "person.wave.2"
+        case .neural: return "bolt.horizontal"
+        }
     }
 
-    private typealias Setup = @Sendable (@escaping @Sendable (String) -> Void) async throws -> Void
-
-    nonisolated private static func languages(_ codes: [String]) -> String {
-        codes.isEmpty ? L("keine Sprachmodelle") : codes.map { $0.uppercased() }.joined(separator: ", ")
+    private var detail: String {
+        var parts = [component.sizeText]
+        parts.append(component.installed ? L("installiert") : L("nicht geladen"))
+        if component.gatedRepo != nil && !component.installed { parts.append(L("Hugging-Face-Anmeldung")) }
+        return parts.joined(separator: " · ")
     }
 
-    nonisolated private static func probe() -> [Row] {
-        let bridge = BridgeEnvironmentManager.shared
-        let piper = PiperEnvironmentManager.shared
-        let phonon = PhononEnvironmentManager.shared
-        let pocket = PocketEnvironmentManager.shared
-        let german = ["martin", "victoria", "thorsten"].filter { GermanKokoroEnvironmentManager.shared.isVoiceReady($0) }
-        let phononSetup: Setup = { onLine in try await phonon.setupEnvironment(onOutput: onLine) }
-        let pocketSetup: Setup = { onLine in try await pocket.setupEnvironment(onOutput: onLine) }
-        let kokoroSetup: Setup = { onLine in try await bridge.runSetup(onOutput: onLine) }
-        let piperSetup: Setup = { onLine in try await piper.runSetup(onOutput: onLine) }
-        var rows: [Row] = []
-        let phononReady = phonon.isEnvironmentReady()
-        rows.append(Row(id: .phonon, ready: phononReady && !phonon.installedLanguages.isEmpty,
-                        detail: phononReady ? languages(phonon.installedLanguages) : L("Laufzeit fehlt (~25 MB)"),
-                        setup: phononReady ? nil : phononSetup))
-        let pocketReady = pocket.isEnvironmentReady()
-        rows.append(Row(id: .pocketTTS, ready: pocketReady && !pocket.installedLanguages.isEmpty,
-                        detail: pocketReady ? languages(pocket.installedLanguages) : L("Laufzeit fehlt (~900 MB, PyTorch)"),
-                        setup: pocketReady ? nil : pocketSetup))
-        let kokoroReady = bridge.isEnvironmentReady()
-        rows.append(Row(id: .kokoro, ready: kokoroReady,
-                        detail: kokoroReady ? L("EN, FR, ES, IT bereit") : L("Laufzeit fehlt (mlx-audio)"),
-                        setup: kokoroReady ? nil : kokoroSetup))
-        rows.append(Row(id: .kokoroGerman, ready: !german.isEmpty,
-                        detail: german.isEmpty ? L("Modelle unten laden") : german.map { $0.capitalized }.joined(separator: ", "), setup: nil))
-        let piperReady = piper.isEnvironmentReady()
-        rows.append(Row(id: .piper, ready: piperReady,
-                        detail: piperReady ? L("Stimmen einzeln in der Galerie laden") : L("Laufzeit fehlt (piper-tts)"),
-                        setup: piperReady ? nil : piperSetup))
-        let supertonicReady = SupertonicEnvironmentManager.shared.isReady()
-        rows.append(Row(id: .supertonic3, ready: supertonicReady, detail: supertonicReady ? L("Bereit") : L("Modell unten laden"), setup: nil))
-        let omniReady = OmniVoiceEnvironmentManager.shared.isReady()
-        rows.append(Row(id: .omniVoice, ready: omniReady, detail: omniReady ? L("Bereit") : L("Modell unten laden (2 GB)"), setup: nil))
-        rows.append(Row(id: .appleSystem, ready: true, detail: String(format: L("%d Systemstimmen"), AppleSpeechEngine.installedVoices().count), setup: nil))
-        return rows
-    }
-
-    private func run(_ engine: TTSEngineID, _ setup: @escaping Setup) {
-        working = engine
+    private func install() {
+        working = true
         Task {
             do {
-                try await setup { line in
-                    let text = line.hasPrefix("STEP ") ? String(line.dropFirst(5)) : line
-                    Task { @MainActor in message[engine] = text }
-                }
-                message[engine] = nil
+                try await ComponentRunner.install([component]) { _, text in message = text }
+                message = nil
             } catch {
-                message[engine] = error.localizedDescription
+                message = error.localizedDescription
             }
-            working = nil
-            await refresh()
+            working = false
+        }
+    }
+
+    private func remove() {
+        working = true
+        Task {
+            do { try await ComponentRunner.remove(component); message = nil } catch { message = error.localizedDescription }
+            working = false
         }
     }
 }

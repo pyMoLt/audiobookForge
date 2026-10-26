@@ -31,7 +31,7 @@ struct QueuedView: View {
                         .textCase(.uppercase)
                         .tracking(1.1)
                     Text(book.title)
-                        .font(.system(size: 26, weight: .semibold, design: .serif))
+                        .appFont(size: 26, weight: .semibold, design: .serif)
                         .multilineTextAlignment(.center)
                     if let position {
                         Text("Platz \(position) von \(pipelineController.queuedBookIDs.count) — wird danach automatisch eingesprochen")

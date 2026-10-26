@@ -55,7 +55,7 @@ struct VoiceCloneEditorView: View {
                         Text(isRecording ? "Aufnahme läuft …" : (recordingURL == nil ? "Bereit zur Aufnahme" : "Aufnahme vorhanden"))
                             .flowFont(.headline)
                         Text(String(format: "%.0f s", secondsRecorded))
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
+                            .appFont(size: 22, weight: .semibold, design: .rounded)
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
@@ -97,7 +97,7 @@ struct VoiceCloneEditorView: View {
                     .textCase(.uppercase)
                     .tracking(1.1)
                 Text("Eigene Stimme")
-                    .font(.system(size: 26, weight: .semibold, design: .serif))
+                    .appFont(size: 26, weight: .semibold, design: .serif)
             }
             .padding(.horizontal, 26)
             .padding(.top, 24)
@@ -122,7 +122,7 @@ struct VoiceCloneEditorView: View {
                                 .flowFont(.callout)
                                 .foregroundStyle(.secondary)
                             TextEditor(text: $refText)
-                                .font(.system(size: 13, design: .serif))
+                                .appFont(size: 13, design: .serif)
                                 .scrollContentBackground(.hidden)
                                 .padding(8)
                                 .frame(minHeight: 80)
@@ -158,7 +158,7 @@ struct VoiceCloneEditorView: View {
             .padding(.horizontal, 26)
             .padding(.vertical, 16)
         }
-        .frame(minWidth: 540, minHeight: 560)
+        .resizableSheet(preferred: CGSize(width: 560, height: 600), floor: CGSize(width: 480, height: 480))
         .background { PaperPage() }
         .navigationTitle("Eigene Stimme")
         .onDisappear {

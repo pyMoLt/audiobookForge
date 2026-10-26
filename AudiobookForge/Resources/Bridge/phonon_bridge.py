@@ -19,6 +19,31 @@ import sys
 import numpy as np
 
 
+def steps_model(model: str, steps: int) -> str:
+    """The runtime reads the refinement steps (lsd_decode_steps) only from
+    config.json. For another value, build a temporary model folder: links
+    to every file, plus a changed config. Removed when the bridge exits."""
+    config_path = os.path.join(model, "config.json")
+    if steps <= 0 or not os.path.isfile(config_path):
+        return model
+    config = json.load(open(config_path, encoding="utf-8"))
+    if config.get("lsd_decode_steps") == steps:
+        return model
+    import atexit
+    import shutil
+    import tempfile
+
+    folder = tempfile.mkdtemp(prefix="phonon-steps-")
+    atexit.register(shutil.rmtree, folder, True)
+    for name in os.listdir(model):
+        if name != "config.json":
+            os.symlink(os.path.join(os.path.abspath(model), name), os.path.join(folder, name))
+    config["lsd_decode_steps"] = steps
+    with open(os.path.join(folder, "config.json"), "w", encoding="utf-8") as handle:
+        json.dump(config, handle)
+    return folder
+
+
 def main() -> int:
     # Keep stdout a pure binary PCM stream: save the real fd 1 first, then
     # send every Python-level print() to stderr.
@@ -36,7 +61,9 @@ def main() -> int:
     parser.add_argument("--quant", default="q8")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--duration-delta", type=float, default=0.0, help="<0 faster, >0 slower")
+    parser.add_argument("--temperature", type=float, default=0.3, help="sampling temperature (expression)")
     parser.add_argument("--segments-json", required=True)
+    parser.add_argument("--lsd-steps", type=int, default=0, help="refinement steps; 0 = the model's config")
     args = parser.parse_args()
 
     try:
@@ -48,12 +75,12 @@ def main() -> int:
         segments = plan["segments"]
         pauses = plan.get("pauses_ms", [])
 
-        kwargs = {"lang": args.lang, "device": "cpu"}
+        kwargs = {"lang": args.lang, "device": "cpu", "temperature": args.temperature}
         if args.quant and args.quant != "f32":
             kwargs["quant"] = args.quant
         if abs(args.duration_delta) > 1e-6:
             kwargs["conditions"] = {"duration_delta": args.duration_delta}
-        tts = ptts.TTS(args.model, **kwargs)
+        tts = ptts.TTS(steps_model(args.model, args.lsd_steps), **kwargs)
         voice = None
         if args.voice:
             if args.voice.endswith(".safetensors"):

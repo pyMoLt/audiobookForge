@@ -44,10 +44,11 @@ struct VoiceGalleryView: View {
     @State private var engineFilter: TTSEngineID?
     @State private var genderFilter: GenderFilter = .all
     @State private var onlyAvailable = false
-    @State private var pendingDownloadVoice: String?
-    @State private var voiceToDownload: VoiceProfile?
-    @State private var downloadingVoice: String?
-    @State private var downloadProgress: Double = 0
+    /// Voice whose missing pieces the install sheet offers (v4.2).
+    @State private var installingProfile: VoiceProfile?
+    /// Set when the card itself was tapped: choose the voice once installed.
+    @State private var chooseAfterInstall: VoiceID?
+    @State private var voicePendingRemoval: (profile: VoiceProfile, component: EngineComponent)?
     @State private var downloadError: String?
     @State private var clones: [VoiceClone] = []
     @State private var showingCloneRecorder = false
@@ -65,7 +66,7 @@ struct VoiceGalleryView: View {
 
     private var isBookMode: Bool { onSelect != nil }
 
-    private static let columns = [GridItem(.adaptive(minimum: 280), spacing: 12)]
+    private static let columns = [GridItem(.adaptive(minimum: 280), spacing: 12, alignment: .top)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -115,7 +116,7 @@ struct VoiceGalleryView: View {
             }
             .scrollIndicators(.never)
         }
-        .frame(minWidth: embedded ? 0 : 640, idealWidth: 880, minHeight: embedded ? 0 : 560, idealHeight: 720)
+        .modifier(GallerySheetFrame(embedded: embedded))
         .background { if !embedded { PaperPage() } }
         .navigationTitle(isBookMode ? "Stimme für dieses Buch" : "Stimmen")
         .onAppear {
@@ -159,18 +160,43 @@ struct VoiceGalleryView: View {
                 Text("„\(clone.name)“ wird entfernt. Bücher, die sie nutzen, fallen auf ihre Standardstimme zurück.")
             }
         }
-        .alert("Stimme herunterladen?", isPresented: Binding(get: { voiceToDownload != nil }, set: { if !$0 { voiceToDownload = nil } })) {
-            Button("Herunterladen", role: .none) {
-                if let profile = voiceToDownload {
-                    startPiperDownload(profile)
+        .sheet(item: $installingProfile, onDismiss: { chooseAfterInstall = nil }) { profile in
+            VoiceInstallSheet(profile: profile) {
+                availabilityRefreshToken += 1
+                if chooseAfterInstall == profile.id {
+                    chooseAfterInstall = nil
+                    applyDefault(profile)
                 }
-                voiceToDownload = nil
             }
-            Button("Abbrechen", role: .cancel) { voiceToDownload = nil }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .engineInventoryChanged)) { _ in availabilityRefreshToken += 1 }
+        #if DEBUG
+        // Visual pass (v4.2.2): galleryTab=all|recommended, galleryLanguage=it,
+        // galleryEngine=pocketTTS|none, galleryInstall=<engine>:<voice>
+        .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+            let info = note.userInfo as? [String: String] ?? [:]
+            if let value = info["galleryTab"] { tab = value == "all" ? .all : .recommended }
+            if info["galleryRecord"] == "open" { showingCloneRecorder = true }
+            if let value = info["galleryLanguage"] { language = value }
+            if let value = info["galleryEngine"] { engineFilter = TTSEngineID(rawValue: value) }
+            if let spec = info["galleryInstall"], let colon = spec.firstIndex(of: ":"),
+               let engine = TTSEngineID(rawValue: String(spec[..<colon])),
+               let profile = VoiceCatalog.profile(for: VoiceID(engine: engine, voice: String(spec[spec.index(after: colon)...]))) {
+                installingProfile = profile
+            }
+        }
+        #endif
+        .confirmationDialog(String(format: L("„%@“ entfernen?"), voicePendingRemoval?.profile.displayName ?? ""),
+                            isPresented: Binding(get: { voicePendingRemoval != nil }, set: { if !$0 { voicePendingRemoval = nil } })) {
+            if let pending = voicePendingRemoval {
+                Button(String(format: L("%@ freigeben"), pending.component.sizeText), role: .destructive) {
+                    Task {
+                        do { try await ComponentRunner.remove(pending.component) } catch { downloadError = error.localizedDescription }
+                    }
+                }
+            }
         } message: {
-            if let profile = voiceToDownload {
-                Text("„\(profile.displayName)“ wird von Hugging Face (rhasspy/piper-voices, MIT-Lizenz) geladen und in der Piper-Umgebung der App abgelegt.")
-            }
+            Text("Die Hörprobe bleibt; zum Vorlesen lädst du die Stimme hier wieder.")
         }
     }
 
@@ -181,7 +207,7 @@ struct VoiceGalleryView: View {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isBookMode ? "Sprecher:in für dieses Buch" : "Sprecherkartei")
-                        .font(.system(size: 22, weight: .semibold, design: .serif))
+                        .appFont(size: 22, weight: .semibold, design: .serif)
                     Text("Hörprobe antippen · Karte wählen")
                         .flowFont(.caption)
                         .foregroundStyle(.secondary)
@@ -272,14 +298,16 @@ struct VoiceGalleryView: View {
                 StatusBadge(text: [L("Sehr schnell"), L("Sehr schnell"), L("Schnell"), L("Schnell"), L("Echtzeit"), L("Langsam")][min(engine.speedRank, 5)], systemImage: "hare")
                 if engine.supportsCloning { StatusBadge(text: L("Klonen"), systemImage: "person.2.wave.2") }
             }
+            Label(engine.license, systemImage: "doc.text")
+                .flowFont(.caption)
+                .foregroundStyle(.secondary)
             if !installed {
-                Button {
-                    NotificationCenter.default.post(name: .openSettingsPane, object: SettingsPane.engines.rawValue)
-                    if !embedded { dismiss() }
-                } label: {
-                    Label("Zu den Engines & Downloads", systemImage: "arrow.down.circle")
+                if let first = VoiceCatalog.profiles(language: language).first(where: { $0.id.engine == engine }) {
+                    Button { installingProfile = first } label: {
+                        Label(String(format: L("%@ installieren"), engine.shortName), systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
                 }
-                .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
             }
         }
         .padding(16)
@@ -295,26 +323,55 @@ struct VoiceGalleryView: View {
     /// Eigene Stimmen (Stimmklon): Referenzaufnahmen, die von der
     /// bevorzugten Klon-Engine nachgeahmt werden. Nur sichtbar, wenn eine
     /// klon-fähige Engine installiert ist.
+    private var cloneTitle: some View {
+        Text("Eigene Stimmen")
+            .flowFont(.caption, weight: .semibold)
+            .foregroundStyle(.tint)
+            .textCase(.uppercase)
+            .tracking(1.1)
+            .fixedSize()
+    }
+
+    private var cloneEnginePills: some View {
+        SegmentedPills(selection: Binding(get: { settingsStore.settings.preferredCloneEngine },
+                                          set: { settingsStore.settings.preferredCloneEngine = $0 }),
+                       options: [PillOption(value: TTSEngineID.pocketTTS, label: L("Pocket TTS (schnell)"), verbatim: true),
+                                 PillOption(value: TTSEngineID.omniVoice, label: L("OmniVoice (600+ Sprachen)"), verbatim: true)],
+                       size: .small)
+            .fixedSize()
+    }
+
+    @ViewBuilder private var cloneButtons: some View {
+        Button { showingCloneRecorder = true } label: { Label("Aufnehmen", systemImage: "mic.fill") }
+            .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+            .fixedSize()
+        Button { showingCloneImporter = true } label: { Label("Datei", systemImage: "waveform.badge.plus") }
+            .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+            .fixedSize()
+    }
+
     private var cloneSection: some View {
         let cloneEngine = settings.preferredCloneEngine
         let engineAvailable = cloneEngineAvailability[cloneEngine] ?? false
         return Group {
-            HStack {
-                Text("Eigene Stimmen")
-                    .flowFont(.caption, weight: .semibold)
-                    .foregroundStyle(.tint)
-                    .textCase(.uppercase)
-                    .tracking(1.1)
-                Spacer()
-                SegmentedPills(selection: Binding(get: { settingsStore.settings.preferredCloneEngine },
-                                                  set: { settingsStore.settings.preferredCloneEngine = $0 }),
-                               options: [PillOption(value: TTSEngineID.pocketTTS, label: L("Pocket TTS (schnell)"), verbatim: true),
-                                         PillOption(value: TTSEngineID.omniVoice, label: L("OmniVoice (600+ Sprachen)"), verbatim: true)],
-                               size: .small)
-                Button { showingCloneRecorder = true } label: { Label("Aufnehmen", systemImage: "mic.fill") }
-                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                Button { showingCloneImporter = true } label: { Label("Datei", systemImage: "waveform.badge.plus") }
-                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
+            // Narrow sheets (v4.1): the controls move below the title
+            // instead of squeezing it letter by letter.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    cloneTitle
+                    Spacer()
+                    cloneEnginePills
+                    cloneButtons
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    cloneTitle
+                    HStack { cloneEnginePills; cloneButtons }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    cloneTitle
+                    cloneEnginePills
+                    HStack { cloneButtons }
+                }
             }
             .padding(.top, 4)
 
@@ -423,7 +480,8 @@ struct VoiceGalleryView: View {
 
     /// Defaults mode: the language's default voice.
     private func setDefault(_ voiceID: VoiceID, language: String) {
-        settingsStore.settings.ttsEngine = voiceID.engine
+        // The fallback for other languages has its own row (v4.2): choosing
+        // a language default no longer changes it behind the user's back.
         switch language {
         case "de": settingsStore.settings.defaultVoiceDE = voiceID
         case "en": settingsStore.settings.defaultVoiceEN = voiceID
@@ -442,10 +500,11 @@ struct VoiceGalleryView: View {
     /// füllt die Caches. Body-Lesezugriffe bleiben reine Dict-Lookups.
     private func refreshAvailability() async {
         let profiles = VoiceCatalog.allProfiles
+        let settings = settingsStore.settings
         let result = await Task.detached(priority: .userInitiated) { () -> ([VoiceID: Bool], [TTSEngineID: Bool]) in
             var availability: [VoiceID: Bool] = [:]
             for profile in profiles {
-                availability[profile.id] = Self.probeAvailability(profile)
+                availability[profile.id] = Self.probeAvailability(profile, settings: settings)
             }
             var cloneEngines: [TTSEngineID: Bool] = [:]
             cloneEngines[.omniVoice] = Self.isCloneEngineReady(.omniVoice)
@@ -462,37 +521,31 @@ struct VoiceGalleryView: View {
         let selected = isSelected(profile)
         let available = isAvailable(profile)
         let busyWithThisVoice = preview.currentVoiceID == profile.id
-        let needsDownload = profile.id.engine == .piper && !available
+        let needsDownload = !available && profile.id.engine != .appleSystem
         HStack(alignment: .top, spacing: 14) {
             ZStack {
-                if needsDownload {
-                    if downloadingVoice == profile.id.voice {
-                        ProgressRing(fraction: max(downloadProgress, 0.03), lineWidth: 3)
-                            .frame(width: 26, height: 26)
-                    } else {
-                        Button { downloadPiperVoice(profile) } label: {
-                            Image(systemName: "arrow.down")
-                                .font(.system(size: 14, weight: .bold))
-                                .frame(width: 40, height: 40)
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(downloadingVoice != nil)
-                        .help("Stimme laden (~60 MB, Hugging Face rhasspy/piper-voices) — nach Bestätigung")
+                if needsDownload && !VoiceSampleLibrary.has(profile.id) {
+                    Button { installingProfile = profile } label: {
+                        Image(systemName: "arrow.down")
+                            .appFont(size: 14, weight: .bold)
+                            .frame(width: 40, height: 40)
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(.plain)
+                    .help("Stimme installieren — zeigt vorher, was geladen wird")
                 } else {
                     Button {
                         preview.toggle(text: sample(for: profile), engineID: profile.id.engine, voice: profile.id.voice, speed: settings.defaultSpeed(for: profile.id.engine), settings: settings)
                     } label: {
                         Image(systemName: busyWithThisVoice && preview.isPlaying ? "stop.fill" : (busyWithThisVoice && preview.isGenerating ? "waveform" : "play.fill"))
-                            .font(.system(size: 14, weight: .bold))
+                            .appFont(size: 14, weight: .bold)
                             .symbolEffect(.variableColor.iterative, options: .repeating, isActive: busyWithThisVoice && preview.isGenerating)
                             .frame(width: 40, height: 40)
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!available && !(VoiceSampleLibrary.has(profile.id) && sample(for: profile) == profile.sampleText))
-                    .help(available ? L("Hörprobe") : (VoiceSampleLibrary.has(profile.id) ? L("Mitgelieferte Hörprobe") : L("Noch nicht eingerichtet (Einstellungen → Engines & Downloads)")))
+                    .help(available ? L("Hörprobe") : (VoiceSampleLibrary.has(profile.id) ? L("Mitgelieferte Hörprobe") : L("Noch nicht installiert")))
                 }
             }
             .frame(width: 40, height: 40)
@@ -508,16 +561,26 @@ struct VoiceGalleryView: View {
                         .foregroundStyle(.orange)
                         .help(profile.quality.label)
                 }
-                Text(verbatim: "\(profile.gender.label) · \(profile.languageCode) · \(profile.id.engine.shortName)" + (available || needsDownload ? "" : " · " + L("nicht eingerichtet")) + (needsDownload ? " · " + L("zum Laden") : ""))
+                Text(verbatim: "\(profile.gender.label) · \(profile.languageCode) · \(profile.id.engine.shortName)")
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .flowFont(.caption)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 5) {
+                let badges = HStack(spacing: 5) {
                     StatusBadge(text: profile.speed.label, systemImage: "hare")
                     ForEach(profile.tags.prefix(1), id: \.self) { tag in
                         StatusBadge(text: tag, tint: .secondary)
                     }
+                }
+                if needsDownload {
+                    // Heard the sample and like it: install right here. A
+                    // fixed-size pill; on narrow cards it moves below the badges.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 5) { badges; installPill(profile) }
+                        VStack(alignment: .leading, spacing: 6) { badges; installPill(profile) }
+                    }
+                } else {
+                    badges
                 }
             }
             Spacer(minLength: 0)
@@ -537,7 +600,8 @@ struct VoiceGalleryView: View {
             }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Same height for every card of a row, content at the top (v4.2.2).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .flowSurface(cornerRadius: Theme.Radius.row)
         .overlay {
             if selected {
@@ -547,42 +611,56 @@ struct VoiceGalleryView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if isBookMode {
+            // Not installed yet: install first, then choose it (v4.2.2) —
+            // a voice that cannot speak is never set silently.
+            if needsDownload {
+                chooseAfterInstall = profile.id
+                installingProfile = profile
+            } else if isBookMode {
                 choose(profile.id)
             } else {
                 applyDefault(profile)
             }
         }
-        .opacity(available || needsDownload ? 1 : 0.6)
-        .help("\(profile.id.engine.shortName) · „\(profile.id.voice)“ — " + (isBookMode ? L("Karte antippen verwendet sie für dieses Buch") : L("Karte antippen macht sie zur Standardstimme")))
+        .contextMenu {
+            if available {
+                Button(role: .destructive) { askRemoval(profile) } label: { Label("Stimme entfernen …", systemImage: "trash") }
+            }
+        }
+        .help(needsDownload ? L("Karte antippen installiert die Stimme und wählt sie danach")
+              : (isBookMode ? L("Karte antippen verwendet sie für dieses Buch") : L("Karte antippen macht sie zur Standardstimme")))
     }
 
-    private func downloadPiperVoice(_ profile: VoiceProfile) {
-        voiceToDownload = profile
+    private func installPill(_ profile: VoiceProfile) -> some View {
+        Button { installingProfile = profile } label: {
+            Label("Installieren", systemImage: "arrow.down.circle")
+                .flowFont(.caption, weight: .semibold)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(.tint.opacity(0.14)))
+                .foregroundStyle(.tint)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Stimme installieren — zeigt vorher, was geladen wird")
     }
 
-    private func startPiperDownload(_ profile: VoiceProfile) {
-        pendingDownloadVoice = nil
-        guard let voice = PiperVoiceCatalog.voice(id: profile.id.voice) else { return }
-        downloadingVoice = profile.id.voice
-        downloadProgress = 0
-        let manager = PiperEnvironmentManager.shared
-        Task<Void, Never> {
-            do {
-                try await manager.downloadVoice(voice) { fraction in
-                    Task { @MainActor in
-                        downloadProgress = fraction
-                    }
-                }
-                await MainActor.run {
-                    downloadingVoice = nil
-                    availabilityRefreshToken += 1
-                }
-            } catch {
-                await MainActor.run {
-                    downloadingVoice = nil
-                    downloadError = error.localizedDescription
-                }
+    /// Removable voices: Piper voices and the German Kokoro models (the
+    /// others come with a language model — removed under Engines & Downloads).
+    private func askRemoval(_ profile: VoiceProfile) {
+        let settings = settingsStore.settings
+        Task {
+            let component = await Task.detached(priority: .userInitiated) { () -> EngineComponent? in
+                let ids = EngineInventory.requiredComponentIDs(for: profile.id, settings: settings)
+                return EngineInventory.status(of: profile.id.engine, settings: settings).components
+                    .first { ids.contains($0.id) && $0.kind == .voice && $0.installed }
+            }.value
+            if let component {
+                voicePendingRemoval = (profile, component)
+            } else {
+                NotificationCenter.default.post(name: .openSettingsPane, object: SettingsPane.engines.rawValue)
+                if !embedded { dismiss() }
             }
         }
     }
@@ -619,7 +697,7 @@ struct VoiceGalleryView: View {
 
     /// Synchronous probe (file/env checks) — background use only, never in
     /// a view body.
-    nonisolated private static func probeAvailability(_ profile: VoiceProfile) -> Bool {
+    nonisolated private static func probeAvailability(_ profile: VoiceProfile, settings: AppSettings) -> Bool {
         switch profile.id.engine {
         case .kokoro:
             return BridgeEnvironmentManager.shared.isEnvironmentReady()
@@ -636,10 +714,23 @@ struct VoiceGalleryView: View {
             return true
         case .phonon:
             let (language, _) = PhononEngine.split(profile.id.voice)
-            return PhononEnvironmentManager.shared.isReady(language: language)
+            return PhononEnvironmentManager.shared.isReady(language: PhononEnvironmentManager.modelKey(language: language, english31m: settings.phononEnglish31m))
         case .pocketTTS:
             let (language, _) = PhononEngine.split(profile.id.voice)
             return PocketEnvironmentManager.shared.isModelReady(language) && PocketEnvironmentManager.shared.isEnvironmentReady()
+        }
+    }
+}
+
+/// As a sheet the gallery opens at a size that fits the window and can be
+/// resized (v4.2.2); embedded (re-voice sheet) it just fills its space.
+private struct GallerySheetFrame: ViewModifier {
+    let embedded: Bool
+    func body(content: Content) -> some View {
+        if embedded {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            content.resizableSheet(preferred: CGSize(width: 880, height: 720), floor: CGSize(width: 520, height: 460))
         }
     }
 }

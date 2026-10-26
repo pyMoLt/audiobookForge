@@ -22,6 +22,7 @@ enum VoiceSampleBuilder {
         settings.chapterLeadInMs = 150
         settings.chapterTailMs = 250
         settings.loudnessNormalizationEnabled = false
+        settings.audioEnhancementEnabled = false
         guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settings) else { log("ERROR kein ffmpeg"); return }
 
         let indexURL = directory.appendingPathComponent("voice_samples.json")

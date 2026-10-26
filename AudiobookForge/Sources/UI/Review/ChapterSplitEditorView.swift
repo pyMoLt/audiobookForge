@@ -104,7 +104,7 @@ struct ChapterSplitEditorView: View {
             }
         }
         .onAppear { loadFromBook() }
-        .frame(minWidth: 820, minHeight: 600)
+        .resizableSheet(preferred: CGSize(width: 900, height: 660), floor: CGSize(width: 640, height: 480))
         .background { PaperPage() }
     }
 
@@ -139,7 +139,7 @@ struct ChapterSplitEditorView: View {
                         .frame(width: w)
                         .overlay(
                             Text(ch.title)
-                                .font(.system(size: 9))
+                                .appFont(size: 9)
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                                 .padding(.horizontal, 3)
@@ -344,10 +344,10 @@ struct ChapterSplitEditorView: View {
                     .fill(Color.secondary.opacity(0.2))
                     .frame(height: 1)
                 Image(systemName: "scissors")
-                    .font(.system(size: 10))
+                    .appFont(size: 10)
                     .foregroundStyle(.secondary)
                 Text("Hier teilen")
-                    .font(.system(size: 10))
+                    .appFont(size: 10)
                     .foregroundStyle(.secondary)
                 Rectangle()
                     .fill(Color.secondary.opacity(0.2))

@@ -32,17 +32,40 @@ final class PiperEnvironmentManager: @unchecked Sendable {
         FileManager.default.isExecutableFile(atPath: piperExecutableURL.path)
     }
 
+    /// Multi-speaker voices carry their style after "#" (v4.2), e.g.
+    /// "de_DE-thorsten_emotional-medium#whisper"; all styles share one model.
+    static func baseVoiceID(_ voiceID: String) -> String {
+        String(voiceID.split(separator: "#", maxSplits: 1).first ?? Substring(voiceID))
+    }
+
+    static func style(of voiceID: String) -> String? {
+        let parts = voiceID.split(separator: "#", maxSplits: 1)
+        return parts.count == 2 ? String(parts[1]) : nil
+    }
+
+    /// Speaker id of a style, from the model's `speaker_id_map`.
+    func speakerID(for voiceID: String) -> Int? {
+        guard let style = Self.style(of: voiceID), let data = try? Data(contentsOf: onnxConfigURL(for: voiceID)) else { return nil }
+        return Self.speakerID(style: style, config: data)
+    }
+
+    static func speakerID(style: String, config: Data) -> Int? {
+        guard let json = try? JSONSerialization.jsonObject(with: config) as? [String: Any],
+              let map = json["speaker_id_map"] as? [String: Any] else { return nil }
+        return (map[style] as? Int) ?? (map[style] as? NSNumber)?.intValue
+    }
+
     func isVoiceDownloaded(_ voiceID: String) -> Bool {
         FileManager.default.fileExists(atPath: onnxURL(for: voiceID).path)
             && FileManager.default.fileExists(atPath: onnxConfigURL(for: voiceID).path)
     }
 
     func onnxURL(for voiceID: String) -> URL {
-        voicesDirectory.appendingPathComponent("\(voiceID).onnx")
+        voicesDirectory.appendingPathComponent("\(Self.baseVoiceID(voiceID)).onnx")
     }
 
     func onnxConfigURL(for voiceID: String) -> URL {
-        voicesDirectory.appendingPathComponent("\(voiceID).onnx.json")
+        voicesDirectory.appendingPathComponent("\(Self.baseVoiceID(voiceID)).onnx.json")
     }
 
     func ensureResourcesCopied() throws {
@@ -101,17 +124,51 @@ final class PiperEnvironmentManager: @unchecked Sendable {
         try await download(from: voice.configURL, to: onnxConfigURL(for: voice.id)) { _ in onProgress(1.0) }
     }
 
+    /// A stalled connection gives up after 30 s instead of hanging for
+    /// minutes (v4.2); a download is tried up to three times.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 30 * 60
+        return URLSession(configuration: configuration)
+    }()
+
     private func download(from remoteURL: URL, to destination: URL, onProgress: @escaping @Sendable (Double) -> Void) async throws {
-        let (tempURL, response) = try await URLSession.shared.download(from: remoteURL)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw BridgeEnvironmentError.setupFailed(exitCode: -1)
+        var lastError: Error = BridgeEnvironmentError.setupFailed(exitCode: -1)
+        for attempt in 1...3 {
+            do {
+                let (tempURL, response) = try await Self.session.download(from: remoteURL, delegate: DownloadProgress(onProgress))
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw BridgeEnvironmentError.setupFailed(exitCode: -1)
+                }
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: destination)
+                onProgress(1.0)
+                return
+            } catch {
+                lastError = error
+                if Task.isCancelled || attempt == 3 { break }
+                try await Task.sleep(for: .seconds(2 * attempt))
+            }
         }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.moveItem(at: tempURL, to: destination)
-        onProgress(1.0)
+        throw lastError
     }
+}
+
+/// Reports a download's progress (the async API has no progress of its own).
+private final class DownloadProgress: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+    init(_ onProgress: @escaping @Sendable (Double) -> Void) { self.onProgress = onProgress }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        onProgress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 }
 
 struct PiperVoice: Identifiable, Hashable, Sendable {
@@ -150,6 +207,7 @@ enum PiperVoiceCatalog {
     ]
 
     static func voice(id: String) -> PiperVoice? {
-        allVoices.first { $0.id == id }
+        let base = PiperEnvironmentManager.baseVoiceID(id)
+        return allVoices.first { $0.id == base }
     }
 }

@@ -144,7 +144,7 @@ struct PiperEngine: TTSEngine {
             // noise, editable in Erweitert.
             "--noise-scale", String(settings.piperNoiseScale),
             "--noise-w", String(settings.piperNoiseW),
-        ]
+        ] + (environment.speakerID(for: voice).map { ["--speaker", String($0)] } ?? [])
 
         let inputPipe = Pipe()
         let outputPipe = Pipe()

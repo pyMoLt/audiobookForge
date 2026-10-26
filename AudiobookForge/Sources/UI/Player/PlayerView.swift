@@ -63,6 +63,12 @@ struct PlayerView: View {
             .sheet(item: $diffChapter) { chapter in
                 SummaryDiffView(chapterTitle: chapter.title, originalText: chapter.cleanedText, summaryText: chapter.summarizedText ?? "")
             }
+            #if DEBUG
+            // diff=open: comparison of the first chapter (visual pass).
+            .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+                if (note.userInfo as? [String: String])?["diff"] == "open" { diffChapter = book.chapters.first }
+            }
+            #endif
         } else {
             EmptyStateCard(systemImage: "questionmark.folder", title: "Buch nicht gefunden")
         }
@@ -268,6 +274,17 @@ struct PlayerView: View {
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
                 guard var updated = libraryStore.book(id: bookID) else { return }
+                // v4: with chapter audio still on disk, verify the chosen file
+                // against it, link the book and free the chapter cache.
+                if ChapterAudioStore.chapterAudioSizeBytes(bookID: bookID) > 0,
+                   let ffmpeg = await FFmpegLocator.resolveAsync(settings: AppSettings()),
+                   let result = await ChapterAudioCleanup.releaseChapterAudio(book: updated, packagedURL: url, ffmpeg: ffmpeg,
+                                                                              chapterAudioRoot: AppPaths.chapterAudioRoot),
+                   result.verified {
+                    libraryStore.upsert(result.book)
+                    await playback.reload(result.book)
+                    return
+                }
                 let bookmark = (try? url.bookmarkData()) ?? Data()
                 let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64) ?? 0
                 updated.packagedAudio = PackagedAudioInfo(url: url, bookmarkData: bookmark, sizeBytes: size, verifiedAt: Date())
@@ -456,7 +473,7 @@ private struct SubtitlePill: View {
         ZStack {
             if let text, !text.isEmpty {
                 Text(text)
-                    .font(.system(size: 15, design: .serif))
+                    .appFont(size: 15, design: .serif)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
                     .padding(.horizontal, 18)
@@ -559,7 +576,7 @@ private struct TransportControls: View {
                 coordinator.togglePlayPause()
             } label: {
                 Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: large ? 26 : 17, weight: .bold))
+                    .appFont(size: large ? 26 : 17, weight: .bold)
                     .foregroundStyle(accent.onAccent)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: large ? 66 : 42, height: large ? 66 : 42)
@@ -578,7 +595,7 @@ private struct TransportControls: View {
     private func button(_ symbol: String, _ help: String, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: size, weight: .semibold))
+                .appFont(size: size, weight: .semibold)
                 .frame(width: size * 1.9, height: size * 1.9)
                 .contentShape(Circle())
         }
@@ -681,7 +698,7 @@ private struct SecondaryControls: View {
                 NSApp.setAlwaysOnTop(alwaysOnTop)
             } label: {
                 Image(systemName: alwaysOnTop ? "pin.fill" : "pin")
-                    .font(.system(size: 13, weight: .semibold))
+                    .appFont(size: 13, weight: .semibold)
                     .frame(width: 30, height: 30)
                     .contentShape(Circle())
             }
@@ -743,7 +760,7 @@ struct AmbientPicker: View {
                     } label: {
                         VStack(spacing: 7) {
                             Image(systemName: scene.systemImage)
-                                .font(.system(size: 20))
+                                .appFont(size: 20)
                                 .symbolRenderingMode(.hierarchical)
                                 .frame(height: 24)
                             Text(scene.displayName)

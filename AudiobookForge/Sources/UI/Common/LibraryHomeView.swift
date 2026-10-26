@@ -450,7 +450,7 @@ private struct FaceOutBook: View {
                 if hovering {
                     Button(action: onPlay) {
                         Image(systemName: "play.fill")
-                            .font(.system(size: 18, weight: .bold))
+                            .appFont(size: 18, weight: .bold)
                             .frame(width: 48, height: 48)
                             .contentShape(Circle())
                     }

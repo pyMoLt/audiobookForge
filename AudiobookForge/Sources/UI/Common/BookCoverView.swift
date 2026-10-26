@@ -67,14 +67,14 @@ private struct GeneratedCover: View {
                 VStack(alignment: .leading, spacing: width * 0.04) {
                     Rectangle().fill(Color.white.opacity(0.7)).frame(width: width * 0.18, height: 2)
                     Text(title)
-                        .font(.system(size: width * 0.105, weight: .semibold, design: .serif))
+                        .appFont(size: width * 0.105, weight: .semibold, design: .serif)
                         .foregroundStyle(.white)
                         .lineLimit(5)
                         .minimumScaleFactor(0.6)
                     Spacer(minLength: 0)
                     if !author.isEmpty {
                         Text(author)
-                            .font(.system(size: width * 0.065, weight: .medium))
+                            .appFont(size: width * 0.065, weight: .medium)
                             .foregroundStyle(Color.white.opacity(0.85))
                             .lineLimit(2)
                     }
@@ -83,7 +83,7 @@ private struct GeneratedCover: View {
                 .frame(width: width, height: height, alignment: .topLeading)
             } else {
                 Text(String(title.prefix(1)).uppercased())
-                    .font(.system(size: width * 0.5, weight: .semibold, design: .serif))
+                    .appFont(size: width * 0.5, weight: .semibold, design: .serif)
                     .foregroundStyle(.white)
                     .frame(width: width, height: height)
             }

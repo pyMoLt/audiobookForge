@@ -41,7 +41,9 @@ struct FlowBackground: View {
 
     var body: some View {
         Group {
-            if settingsStore.settings.flowBackgroundEnabled || mood != nil {
+            if settingsStore.settings.pixelMode {
+                PixelBackdrop(color: accent.baseColor, dark: colorScheme == .dark)
+            } else if settingsStore.settings.flowBackgroundEnabled || mood != nil {
                 if motionAllowed && energyAnimates {
                     TimelineView(.animation(minimumInterval: 1.0 / 3.0)) { context in
                         mesh(phase: context.date.timeIntervalSinceReferenceDate)
@@ -106,5 +108,31 @@ extension View {
     /// language as cards, with the panel radius.
     func flowPanel(cornerRadius: CGFloat = Theme.Radius.panel) -> some View {
         flowSurface(cornerRadius: cornerRadius)
+    }
+}
+
+/// Pixel mode's background (v4.3): a flat tone with a coarse dither.
+private struct PixelBackdrop: View {
+    let color: Color
+    let dark: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(dark ? Color(white: 0.09) : Color(white: 0.93)))
+            let cell: CGFloat = 8
+            let tint = color.opacity(dark ? 0.16 : 0.12)
+            var y: CGFloat = 0
+            var row = 0
+            while y < size.height {
+                var x: CGFloat = row % 2 == 0 ? 0 : cell
+                while x < size.width {
+                    context.fill(Path(CGRect(x: x, y: y, width: cell, height: cell)), with: .color(tint))
+                    x += cell * 2
+                }
+                y += cell
+                row += 1
+            }
+        }
+        .ignoresSafeArea()
     }
 }

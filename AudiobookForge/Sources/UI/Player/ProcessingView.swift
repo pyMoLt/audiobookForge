@@ -4,6 +4,7 @@ struct ProcessingView: View {
     @Environment(LibraryStore.self) private var libraryStore
     @Environment(PipelineController.self) private var pipelineController
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(SettingsStore.self) private var settingsStore
     let bookID: UUID
 
     private var book: BookProject? { libraryStore.book(id: bookID) }
@@ -35,12 +36,15 @@ struct ProcessingView: View {
 
                     if let progress = pipelineController.progress[bookID] {
                         RunProgressPanel(progress: progress)
+                        if settingsStore.settings.loadingQuipsEnabled, pipelineController.isRunning(bookID) {
+                            LoadingQuipLine()
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .firstTextBaseline) {
                             Text("Inhalt")
-                                .font(.system(size: 24, weight: .semibold, design: .serif))
+                                .appFont(size: 24, weight: .semibold, design: .serif)
                             let ready = book.chapters.filter { $0.audioStatus == .ready }.count
                             Text("\(ready) von \(book.chapters.count) Kapiteln eingesprochen")
                                 .flowFont(.callout)
@@ -104,7 +108,7 @@ struct ProcessingView: View {
                     .textCase(.uppercase)
                     .tracking(1.1)
                 Text(book.title)
-                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .appFont(size: 28, weight: .semibold, design: .serif)
                     .lineLimit(3)
                 if !book.author.isEmpty {
                     Text(book.author).flowFont(.title3, weight: .regular).foregroundStyle(.secondary)
@@ -149,7 +153,7 @@ private struct ChapterProgressRow: View {
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(chapter.title)
-                    .font(.system(size: 14, design: .serif))
+                    .appFont(size: 14, design: .serif)
                     .foregroundStyle(chapter.audioStatus == .pending ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                     .lineLimit(2)
                 if let error = chapter.lastError {
@@ -204,7 +208,7 @@ private struct RunProgressPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(Int((progress.overallFraction * 100).rounded())) %")
-                        .font(.system(size: 40, weight: .semibold, design: .serif))
+                        .appFont(size: 40, weight: .semibold, design: .serif)
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Spacer()

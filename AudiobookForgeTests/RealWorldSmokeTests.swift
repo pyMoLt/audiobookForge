@@ -18,17 +18,17 @@ final class RealWorldSmokeTests: XCTestCase {
         return processed
     }
 
-    private var testBooksDir: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // RealWorldSmokeTests.swift -> AudiobookForgeTests/
-            .deletingLastPathComponent() // -> AudiobookForge/
-            .deletingLastPathComponent() // -> audiobookSwift/
-            .appendingPathComponent("TestBooks", isDirectory: true)
+    private func fixtureURL(_ filename: String) throws -> URL {
+        guard let dir = ProcessInfo.processInfo.environment["AUDIOBOOKFORGE_SMOKE_FIXTURES_DIR"], !dir.isEmpty else {
+            throw XCTSkip("Set AUDIOBOOKFORGE_SMOKE_FIXTURES_DIR to run real-world smoke tests")
+        }
+        let url = URL(fileURLWithPath: dir, isDirectory: true).appendingPathComponent(filename)
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Smoke fixture not present: \(filename)")
+        return url
     }
 
     func testExtractsAttentionPaperPDF() async throws {
-        let url = testBooksDir.appendingPathComponent("Attention_Is_All_You_Need.pdf")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Test PDF not present")
+        let url = try fixtureURL("Attention_Is_All_You_Need.pdf")
 
         let extractor = PDFExtractor()
         let document = try await extractor.extract(from: url)
@@ -46,8 +46,7 @@ final class RealWorldSmokeTests: XCTestCase {
     }
 
     func testExtractsChristmasCarolEPUB() async throws {
-        let url = testBooksDir.appendingPathComponent("A_Christmas_Carol.epub")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Test EPUB not present")
+        let url = try fixtureURL("A_Christmas_Carol.epub")
 
         let extractor = EPUBExtractor()
         let document = try await extractor.extract(from: url)
@@ -69,8 +68,7 @@ final class RealWorldSmokeTests: XCTestCase {
         // etc.). A non-recursive TOC query only sees the 6 top-level Book
         // links, producing 6 (or here, ~8-10 after front/back matter)
         // "chapters" that are each an entire Book's worth of text.
-        let url = URL(fileURLWithPath: "sample.epub")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "User-provided test EPUB not present")
+        let url = try fixtureURL("pg27942-images-3.epub")
 
         let extractor = EPUBExtractor()
         let document = try await extractor.extract(from: url)
@@ -90,8 +88,7 @@ final class RealWorldSmokeTests: XCTestCase {
     }
 
     func testExtractsUserProvidedPaperAndDumpsForManualLLMTesting() async throws {
-        let url = URL(fileURLWithPath: "sample.pdf")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "User-provided test PDF not present")
+        let url = try fixtureURL("1-s2.0-S0148296316302843-main-2.pdf")
 
         let extractor = PDFExtractor()
         let document = try await extractor.extract(from: url)
@@ -110,8 +107,7 @@ final class RealWorldSmokeTests: XCTestCase {
     }
 
     func testExtractsMDM2DatabasePaperWithNoOutlineNoOCR() async throws {
-        let url = URL(fileURLWithPath: "sample2.pdf")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "User-provided test PDF not present")
+        let url = try fixtureURL("263453.pdf")
 
         let extractor = PDFExtractor()
         let document = try await extractor.extract(from: url)
@@ -139,8 +135,7 @@ final class RealWorldSmokeTests: XCTestCase {
     }
 
     func testVisionImagePassOnUserProvidedPaper() async throws {
-        let url = URL(fileURLWithPath: "sample.pdf")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "User-provided test PDF not present")
+        let url = try fixtureURL("1-s2.0-S0148296316302843-main-2.pdf")
 
         var settings = AppSettings()
         settings.describeImagesWithVisionModel = true

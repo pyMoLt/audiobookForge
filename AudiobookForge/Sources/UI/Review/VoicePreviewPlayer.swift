@@ -68,7 +68,8 @@ final class VoicePreviewPlayer: ObservableObject {
         let request = VoicePreviewService.Request(
             voiceID: VoiceID(engine: engineID, voice: voice),
             speed: speed,
-            text: sampleText
+            text: sampleText,
+            expression: settings.expression(for: engineID) ?? 0
         )
         task = Task {
             do {

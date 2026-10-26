@@ -458,7 +458,7 @@ guard let masterTiff = master.tiffRepresentation,
     fatalError("Failed to encode master PNG")
 }
 
-let appIconDir = "AudiobookForge/AudiobookForge/Resources/Assets.xcassets/AppIcon.appiconset"
+let appIconDir = "AudiobookForge/Resources/Assets.xcassets/AppIcon.appiconset"
 try? FileManager.default.createDirectory(atPath: appIconDir, withIntermediateDirectories: true)
 
 // Target sizes required by macOS AppIcon

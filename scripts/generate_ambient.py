@@ -26,7 +26,7 @@ import numpy as np
 
 SAMPLE_RATE = 24000
 SECONDS = 90
-OUT = Path(__file__).resolve().parents[1] / "AudiobookForge/AudiobookForge/Resources/Ambient"
+OUT = Path(__file__).resolve().parents[1] / "AudiobookForge/Resources/Ambient"
 
 
 def rng(seed: int) -> np.random.Generator:

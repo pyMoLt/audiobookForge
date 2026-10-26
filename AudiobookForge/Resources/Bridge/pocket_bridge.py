@@ -84,6 +84,7 @@ def main() -> int:
     parser.add_argument("--voice-cache", default="", help="where the cloned voice state is cached")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--lang", default="de", help="two-letter language for number reading")
+    parser.add_argument("--temperature", type=float, default=0.3, help="sampling temperature (expression)")
     parser.add_argument("--segments-json", required=True)
     args = parser.parse_args()
 
@@ -98,6 +99,7 @@ def main() -> int:
         pauses = plan.get("pauses_ms", [])
 
         model = TTSModel.load_model(language=args.variant)
+        model.temp = args.temperature
         if args.voice_audio:
             if args.voice_cache and os.path.exists(args.voice_cache):
                 state = model.get_state_for_audio_prompt(args.voice_cache)

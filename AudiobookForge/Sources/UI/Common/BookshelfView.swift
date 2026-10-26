@@ -654,7 +654,7 @@ struct BookshelfView: View {
                 Text(title).lineLimit(1)
                 Text("\(count)").monospacedDigit().foregroundStyle(.tertiary)
             }
-            .font(.system(size: 10, weight: .semibold))
+            .appFont(size: 10, weight: .semibold)
             .foregroundStyle(.primary.opacity(0.75))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -680,7 +680,7 @@ struct BookshelfView: View {
                 Text(title).lineLimit(1)
                 Text("\(count)").monospacedDigit().foregroundStyle(.tertiary)
             }
-            .font(.system(size: 8.5, weight: .semibold))
+            .appFont(size: 8.5, weight: .semibold)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 7)
             .frame(height: 11)
@@ -994,7 +994,7 @@ private struct AddSlot: View {
                     .frame(width: PixelShelf.unit * 11, height: PixelShelf.unit * 46)
                     .overlay {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+                            .appFont(size: 16, weight: .semibold)
                             .foregroundStyle(.tint)
                     }
                     .offset(y: hovering ? -10 : 0)
@@ -1096,7 +1096,7 @@ struct BookSpine: View {
                 titleBlock
                 Spacer(minLength: 0)
                 Text(initials)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .appFont(size: 8, weight: .bold, design: .monospaced)
                     .foregroundStyle(gold)
                     .padding(.bottom, PixelShelf.unit * 3)
             }
@@ -1124,7 +1124,7 @@ struct BookSpine: View {
         .overlay(alignment: .top) {
             if playback.bookID == book.id, playback.coordinator.isPlaying {
                 Image(systemName: "waveform")
-                    .font(.system(size: 9, weight: .bold))
+                    .appFont(size: 9, weight: .bold)
                     .foregroundStyle(gold)
                     .padding(.top, 40)
             }
@@ -1134,7 +1134,7 @@ struct BookSpine: View {
     @ViewBuilder
     private var titleBlock: some View {
         let title = Text(book.title)
-            .font(.system(size: min(12, width * 0.34), weight: .semibold, design: .serif))
+            .appFont(size: min(12, width * 0.34), weight: .semibold, design: .serif)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .truncationMode(.tail)

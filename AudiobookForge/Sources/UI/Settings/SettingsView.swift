@@ -15,16 +15,16 @@ struct SettingsView: View {
     /// Every settings field appears in exactly one area (plan 9.3 —
     /// nothing is lost; the mirror test walks this mapping).
     static let settingsBuckets: [(name: String, fields: [String])] = [
-        ("Stimmen", ["defaultVoiceDE", "defaultVoiceEN", "defaultVoicesByLanguage", "preferredCloneEngine", "voicePreviewSentenceCount", "voicePreviewMaxCharacters", "autoSelectEngineByLanguage"]),
-        ("Sprechfluss", ["sentencePauseMs", "paragraphPauseMs", "headingPauseMs", "listItemPauseMs", "figurePauseMs", "chapterLeadInMs", "chapterTailMs", "pauseJitterPercent", "naturalPauseRhythm", "pauseVariationMs", "kokoroSpeed", "kokoroGermanSpeed", "kokoroThorstenSpeed", "piperSpeed", "piperNoiseScale", "piperNoiseW", "supertonicSpeed", "supertonicPauseSeconds", "phononSpeed"]),
-        ("Ausgabe", ["defaultOutputFormat", "outputBaseFolderPath", "outputFolderTemplate", "mp3Quality", "aacBitrateKbps", "chapterAudioBitrateKbps", "loudnessNormalizationEnabled", "loudnessTargetLUFS", "loudnessTruePeakDB", "loudnessRangeLU", "keepChapterAudioAfterPackaging"]),
+        ("Stimmen", ["defaultVoiceDE", "defaultVoiceEN", "defaultVoicesByLanguage", "preferredCloneEngine", "voicePreviewSentenceCount", "voicePreviewMaxCharacters", "autoSelectEngineByLanguage", "ttsEngine", "phononVoice", "pocketVoice", "kokoroVoice", "piperVoice", "kokoroGermanVoice", "supertonicVoice"]),
+        ("Sprechfluss", ["sentencePauseMs", "paragraphPauseMs", "headingPauseMs", "listItemPauseMs", "figurePauseMs", "chapterLeadInMs", "chapterTailMs", "pauseJitterPercent", "naturalPauseRhythm", "pauseVariationMs", "kokoroSpeed", "kokoroGermanSpeed", "kokoroThorstenSpeed", "piperSpeed", "piperNoiseScale", "piperNoiseW", "supertonicSpeed", "supertonicPauseSeconds", "phononSpeed", "phononTemperature", "pocketTemperature", "phononEnglish31m", "phononRefinementSteps", "pocketHighQuality", "supertonicSteps", "supertonicChunkCharacters", "omniVoiceSteps"]),
+        ("Ausgabe", ["defaultOutputFormat", "outputBaseFolderPath", "outputFolderTemplate", "mp3Quality", "aacBitrateKbps", "loudnessNormalizationEnabled", "loudnessMode", "audioEnhancementEnabled", "audioDefaultsRevision", "loudnessTargetLUFS", "loudnessTruePeakDB", "loudnessRangeLU", "keepChapterAudioAfterPackaging"]),
         ("Textaufbereitung", ["stripRecurringHeadersFooters", "includeFootnotes", "minimumChapterCharacters", "targetChapterCharacters", "excludeBackMatterSections", "defaultDocumentType", "bookTuning", "paperTuning", "reportTuning", "autoSplitEnabled", "autoSplitTargetCharacters", "boxLabelHandling", "speakHeadingNumbers"]),
         ("KI & Zusammenfassung", ["llmProvider", "llmBaseURL", "llmAPIKey", "llmModel", "omlxBaseURL", "omlxAPIKey", "omlxModel", "omlxGeneration", "lmStudioGeneration", "llmContextLimitTokens", "llmRequestTimeoutSeconds", "llmConnectionTimeoutSeconds", "correctImplausibleServerPresets", "autoStartOMLX", "autoUnloadOMLXAfterPass", "promptTemplates", "summarizationChunkCharacterBudget", "aiChapterMaxCharacters", "minAIChapterCharacters", "aiChapterContinuityEnabled", "summarizationBatchTolerance"]),
         ("Bilder", ["llmVisionTimeoutSeconds", "llmVisionThinkingMode", "llmVisionModelOverride", "describeImagesWithVisionModel", "minimumImageDimensionForVisionPass", "imageDescriptionScope", "minimumImageAreaPercent", "minimumImageKilobytes", "maximumImageAspectRatio", "detectVectorFigures", "removeFigureLabelText", "keepFigureCaptions", "removeCrossReferences", "imageDescriptionLabel"]),
-        ("Erscheinungsbild", ["appearanceMode", "textSizeStep", "accent", "glassIntensity", "motionMode", "flowBackgroundEnabled", "sidebarGrouping", "appLanguage"]),
-        ("Engines & Downloads", ["ttsEngine", "phononVoice", "pocketVoice", "pocketHighQuality", "kokoroVoice", "kokoroModelRepo", "piperVoice", "kokoroGermanVoice", "supertonicVoice", "supertonicSteps", "supertonicChunkCharacters", "omniVoiceSteps"]),
+        ("Erscheinungsbild", ["appearanceMode", "textSizeStep", "accent", "glassIntensity", "motionMode", "flowBackgroundEnabled", "sidebarGrouping", "appLanguage", "soundEffectsEnabled", "owlPostEnabled", "loadingQuipsEnabled", "lesserDogEnabled", "pixelMode", "unlockedAchievements", "dogPets"]),
+        ("Engines & Downloads", []),
         ("Leistung", ["powerModeOnAdapter", "powerModeOnBattery", "ttsParallelWorkers", "ttsWorkersByEngine", "omlxParallelRequests", "lmStudioParallelRequests", "visionParallelRequests", "ramWatchdog", "ramWatchdogEnabled", "ramWatchdogAuto", "ramWatchdogManualLimitGB", "speicher"]),
-        ("Diagnose", ["dependencyPathOverrides"]),
+        ("Diagnose", ["dependencyPathOverrides", "kokoroModelRepo"]),
     ]
 
     /// Page lying underneath (the destination when turning forward).
@@ -126,6 +126,7 @@ private struct SettingsPage: View {
     let pane: SettingsPane
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 BookPageHeading(
@@ -143,6 +144,12 @@ private struct SettingsPage: View {
         }
         .scrollEdgeEffectHidden(true, for: .top)
         .scrollIndicators(.never)
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+            if let section = (note.userInfo as? [String: String])?["scrollTo"] { proxy.scrollTo(section, anchor: .top) }
+        }
+        #endif
+        }
     }
 
     @ViewBuilder
@@ -180,7 +187,7 @@ struct BookPageHeading: View {
                     .textCase(.uppercase)
                     .tracking(1.2)
                 Text(L(title))
-                    .font(.system(size: 30, weight: .semibold, design: .serif))
+                    .appFont(size: 30, weight: .semibold, design: .serif)
                 if let subtitle {
                     Text(L(subtitle))
                         .flowFont(.body)
@@ -255,7 +262,13 @@ private struct VoicesSettingsPane: View {
                         galleryMode = GalleryRequest(languageCode: code)
                     }
                 }
-                PillRow(title: "Engine nach Sprache wählen", subtitle: "Erkennt die Buchsprache und nimmt die passende Standardstimme.") {
+                DefaultVoiceCard(language: "Andere Sprachen", flag: "··", voice: Binding(
+                    get: { store.settings.fallbackVoice },
+                    set: { store.settings.setFallbackVoice($0) }
+                ), languageCode: nil, title: L("Für andere Sprachen")) {
+                    galleryMode = GalleryRequest(languageCode: nil)
+                }
+                PillRow(title: "Engine nach Sprache wählen", subtitle: "Erkennt die Buchsprache und nimmt die passende Standardstimme; aus = immer die Stimme für andere Sprachen.") {
                     PillToggle(isOn: $store.settings.autoSelectEngineByLanguage)
                 }
             }
@@ -263,7 +276,7 @@ private struct VoicesSettingsPane: View {
             PillSection("Stimmen-Galerie") {
                 HStack(spacing: 16) {
                     Image(systemName: "rectangle.stack.badge.play")
-                        .font(.system(size: 26))
+                        .appFont(size: 26)
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Alle Stimmen durchhören").flowFont(.body, weight: .semibold)
@@ -319,7 +332,9 @@ private struct DefaultVoiceCard: View {
     let language: String
     let flag: String
     @Binding var voice: VoiceID
-    let languageCode: String
+    /// nil = the fallback for other languages (choices from every language).
+    let languageCode: String?
+    var title: String? = nil
     var onOpenGallery: () -> Void
 
     @StateObject private var preview = VoicePreviewPlayer()
@@ -329,31 +344,40 @@ private struct DefaultVoiceCard: View {
     private var candidates: [VoiceProfile] {
         // The recommended voices (plus the current one); everything else
         // lives in the gallery.
-        VoiceCatalog.profiles(language: languageCode).filter { $0.featured || $0.id == voice }
+        VoiceCatalog.profiles(language: languageCode ?? "de").filter { $0.featured || $0.id == voice }
     }
 
     var body: some View {
         HStack(spacing: 16) {
             Text(flag)
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .appFont(size: 13, weight: .heavy, design: .rounded)
                 .foregroundStyle(.tint)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(.tint.opacity(0.14)))
             VStack(alignment: .leading, spacing: 4) {
-                Text("Standardstimme \(L(language))")
+                Text(title ?? String(format: L("Standardstimme %@"), L(language)))
                     .flowFont(.caption, weight: .semibold)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .tracking(0.6)
                 Text(profile?.displayName ?? voice.voice)
                     .flowFont(.title3)
-                HStack(spacing: 6) {
-                    if let profile {
-                        StatusBadge(text: profile.gender.label, tint: .secondary)
-                        StatusBadge(text: profile.speed.label, systemImage: "hare")
-                        Text(String(repeating: "★", count: profile.quality.points) + String(repeating: "☆", count: max(0, 3 - profile.quality.points)))
-                            .flowFont(.caption)
-                            .foregroundStyle(.orange)
+                if let profile {
+                    let stars = Text(String(repeating: "★", count: profile.quality.points) + String(repeating: "☆", count: max(0, 3 - profile.quality.points)))
+                        .flowFont(.caption)
+                        .foregroundStyle(.orange)
+                    // Narrow windows (v4.1): drop badges instead of overflowing.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            StatusBadge(text: profile.gender.label, tint: .secondary)
+                            StatusBadge(text: profile.speed.label, systemImage: "hare")
+                            stars
+                        }
+                        HStack(spacing: 6) {
+                            StatusBadge(text: profile.speed.label, systemImage: "hare")
+                            stars
+                        }
+                        stars
                     }
                 }
             }
@@ -373,16 +397,16 @@ private struct DefaultVoiceCard: View {
             .glassEffect(.regular.interactive(), in: Circle())
             .help("Hörprobe")
             Menu {
-                ForEach(candidates) { candidate in
-                    Button {
-                        voice = candidate.id
-                    } label: {
-                        if candidate.id == voice {
-                            Label(candidate.displayName, systemImage: "checkmark")
-                        } else {
-                            Text("\(candidate.displayName) · \(candidate.gender.label)")
+                if languageCode == nil {
+                    ForEach(VoiceCatalog.galleryLanguages, id: \.self) { code in
+                        Menu(languageDisplayName(code)) {
+                            ForEach(VoiceCatalog.profiles(language: code).filter(\.featured)) { candidate in
+                                candidateButton(candidate)
+                            }
                         }
                     }
+                } else {
+                    ForEach(candidates) { candidate in candidateButton(candidate) }
                 }
                 Divider()
                 Button("In der Galerie durchhören …", action: onOpenGallery)
@@ -401,6 +425,18 @@ private struct DefaultVoiceCard: View {
         }
         .padding(18)
         .flowSurface(cornerRadius: Theme.Radius.row)
+    }
+
+    private func candidateButton(_ candidate: VoiceProfile) -> some View {
+        Button {
+            voice = candidate.id
+        } label: {
+            if candidate.id == voice {
+                Label(candidate.displayName, systemImage: "checkmark")
+            } else {
+                Text(verbatim: "\(candidate.displayName) · \(candidate.gender.label) · \(candidate.id.engine.shortName)")
+            }
+        }
     }
 }
 
@@ -431,6 +467,9 @@ private struct SpeechSettingsPane: View {
                 PillRow(title: "Menschliche Abweichung", subtitle: "Pausen schwanken leicht, damit es nicht maschinell klingt.") {
                     PillStepper(value: $store.settings.pauseJitterPercent, range: 0...50, step: 5, suffix: "%")
                 }
+                PillRow(title: "Supertonic · Pause zwischen Segmenten", subtitle: "Supertonic spricht in festen Textstücken; diese Stille kommt dazwischen.") {
+                    PillSlider(value: $store.settings.supertonicPauseSeconds, range: 0...1, step: 0.05, format: "%.2f s")
+                }
             }
 
             PillSection("Tempo je Engine") {
@@ -442,15 +481,48 @@ private struct SpeechSettingsPane: View {
                 speedRow("Phonon", $store.settings.phononSpeed, 0.75...1.5)
             }
 
-            PillSection("Klang", footer: "„Lebendigkeit“ steuert, wie stark Satzrhythmus und Aussprache variieren. Höher = ausdrucksstärker, aber weniger vorhersehbar.") {
-                PillRow(title: "Piper · Lebendigkeit (Prosodie)") {
-                    PillSlider(value: $store.settings.piperNoiseScale, range: 0.1...1.5, step: 0.01)
+            PillSection("Ausdruck je Engine", footer: "Wie lebendig die Stimme spricht: ruhiger = gleichmäßiger und vorhersehbarer, lebendiger = mehr Betonung und Abwechslung, aber auch mehr Ausrutscher. Die Mitte ist die Empfehlung der Entwickler. Kokoro, Supertonic und die Systemstimmen haben keinen solchen Regler. Abweichend vom Standard spricht Phonon auch im Stromsparmodus über die CPU statt die Neural Engine.") {
+                ExpressionRow(engine: .phonon, value: $store.settings.phononTemperature,
+                              range: ExpressionDefaults.temperatureRange, standard: ExpressionDefaults.temperature)
+                ExpressionRow(engine: .pocketTTS, value: $store.settings.pocketTemperature,
+                              range: ExpressionDefaults.temperatureRange, standard: ExpressionDefaults.temperature)
+                ExpressionRow(engine: .piper, value: Binding(
+                    get: { store.settings.piperNoiseScale },
+                    set: {
+                        store.settings.piperNoiseScale = $0
+                        store.settings.piperNoiseW = ExpressionDefaults.piperNoiseW(forNoiseScale: $0)
+                    }
+                ), range: ExpressionDefaults.piperNoiseScaleRange, standard: ExpressionDefaults.piperNoiseScale)
+            }
+
+            PillSection("Modelle je Engine", footer: "Englisch spricht Phonon wahlweise mit dem 40M-Modell (nur nicht-kommerziell, Hugging-Face-Anmeldung) oder dem 31M-Modell (Apache 2.0, ohne Anmeldung, rund 5 % schneller). Das gewählte Modell lädst du in der Stimmen-Galerie oder unter Engines & Downloads.") {
+                PillRow(title: "Phonon · Englisch-Modell") {
+                    SegmentedPills(selection: $store.settings.phononEnglish31m, options: [
+                        PillOption(value: false, label: "40M"),
+                        PillOption(value: true, label: "31M · Apache 2.0"),
+                    ], size: .small)
                 }
-                PillRow(title: "Piper · Lebendigkeit (Aussprache)") {
-                    PillSlider(value: $store.settings.piperNoiseW, range: 0.1...1.5, step: 0.01)
+            }
+
+            PillSection("Qualität je Engine", footer: "Mehr Qualität kostet Rechenzeit. Die nötigen Modelle lädst du in der Stimmen-Galerie oder unter Engines & Downloads.") {
+                PillRow(title: "Phonon · Verfeinerungsschritte", subtitle: "Mehr Schritte klingen etwas feiner und kosten 15–30 % Tempo. Über 1 nutzt Phonon die Neural Engine nicht.") {
+                    SegmentedPills(selection: $store.settings.phononRefinementSteps, options: [
+                        PillOption(value: 1, label: "1"),
+                        PillOption(value: 2, label: "2"),
+                        PillOption(value: 4, label: "4"),
+                    ], size: .small)
                 }
-                PillRow(title: "Supertonic · Pause zwischen Segmenten") {
-                    PillSlider(value: $store.settings.supertonicPauseSeconds, range: 0...1, step: 0.05, format: "%.2f s")
+                PillRow(title: "Pocket TTS · Hohe Qualität (24 Schichten)", subtitle: "Natürlicher, aber etwa dreimal langsamer und 2,4 GB Arbeitsspeicher je Worker. Braucht das 24-Schichten-Modell der Sprache.") {
+                    PillToggle(isOn: $store.settings.pocketHighQuality)
+                }
+                PillRow(title: "Supertonic · Syntheseschritte", subtitle: "Mehr Schritte = sauberer, langsamer.") {
+                    PillStepper(value: $store.settings.supertonicSteps, range: 1...20)
+                }
+                PillRow(title: "Supertonic · Zeichen pro Segment") {
+                    PillStepper(value: $store.settings.supertonicChunkCharacters, range: 40...300, step: 10)
+                }
+                PillRow(title: "OmniVoice · Qualitätsstufen", subtitle: "Weniger Stufen = schneller, mehr = hochwertiger.") {
+                    PillStepper(value: $store.settings.omniVoiceSteps, range: 4...64, step: 4)
                 }
             }
         }
@@ -483,14 +555,17 @@ private struct OutputSettingsPane: View {
                     PillPicker(selection: $store.settings.defaultOutputFormat,
                                options: OutputFormat.allCases.map { PillOption(value: $0, label: $0.displayName) })
                 }
-                PillRow(title: "AAC-Bitrate", subtitle: "Für M4B/M4A.") {
+                PillRow(title: "AAC-Bitrate", subtitle: "Für M4B/M4A. Sprache in Mono braucht selten mehr als 128 kbit/s.") {
                     PillStepper(value: $store.settings.aacBitrateKbps, range: 64...320, step: 16, suffix: "kbit/s")
                 }
                 PillRow(title: "MP3-Qualität", subtitle: "0 = höchste Qualität, 9 = kleinste Dateien.") {
                     PillStepper(value: $store.settings.mp3Quality, range: 0...9)
                 }
-                PillRow(title: "Kapitel-Audio (Zwischenspeicher)", subtitle: "Bitrate der einzelnen Kapiteldateien.") {
-                    PillStepper(value: $store.settings.chapterAudioBitrateKbps, range: 32...256, step: 16, suffix: "kbit/s")
+            }
+
+            PillSection("Aufbereitung", footer: "Entfernt Klicks, rauscht leicht ab und hebt die Präsenz über 5 kHz um 2 dB an. Hilft vor allem Phonon, das etwas dumpf klingt. Kostet rund 3 Sekunden Rechenzeit pro 10 Minuten Audio.") {
+                PillRow(title: "Klang aufbereiten") {
+                    PillToggle(isOn: $store.settings.audioEnhancementEnabled)
                 }
             }
 
@@ -499,14 +574,22 @@ private struct OutputSettingsPane: View {
                     PillToggle(isOn: $store.settings.loudnessNormalizationEnabled)
                 }
                 if settingsStore.settings.loudnessNormalizationEnabled {
+                    PillRow(title: "Verfahren", subtitle: settingsStore.settings.loudnessMode == .calm
+                            ? "Ein fester Pegel pro Kapitel, nur Spitzen werden sanft begrenzt. Die Stimme bleibt, wie die Engine sie erzeugt."
+                            : "Regelt die Lautstärke laufend nach (EBU R128, wie vor 4.4). Gleichmäßiger, kann aber dumpfer klingen.") {
+                        SegmentedPills(selection: $store.settings.loudnessMode,
+                                       options: LoudnessMode.allCases.map { PillOption(value: $0, label: $0.displayName) }, size: .small)
+                    }
                     PillRow(title: "Ziel-Lautheit") {
                         PillSlider(value: $store.settings.loudnessTargetLUFS, range: -30 ... -10, step: 0.5, format: "%.1f LUFS")
                     }
                     PillRow(title: "True Peak") {
                         PillSlider(value: $store.settings.loudnessTruePeakDB, range: -6 ... 0, step: 0.5, format: "%.1f dB")
                     }
-                    PillRow(title: "Loudness Range") {
-                        PillSlider(value: $store.settings.loudnessRangeLU, range: 1...20, step: 0.5, format: "%.1f LU")
+                    if settingsStore.settings.loudnessMode == .dynamic {
+                        PillRow(title: "Loudness Range") {
+                            PillSlider(value: $store.settings.loudnessRangeLU, range: 1...20, step: 0.5, format: "%.1f LU")
+                        }
                     }
                 }
             }
@@ -681,52 +764,17 @@ private struct PerformanceSettingsPane: View {
                         ), range: 1...engine.maxWorkers)
                     }
                 }
-            }
-
-        }
-    }
-}
-
-// MARK: - Engines
-
-private struct EnginesSettingsPane: View {
-    @Environment(SettingsStore.self) private var settingsStore
-
-    var body: some View {
-        @Bindable var store = settingsStore
-        VStack(alignment: .leading, spacing: 30) {
-            PillSection("Übersicht", footer: "Alle Engines auf einen Blick. Laufzeiten richtest du hier mit einem Klick ein; Sprachmodelle und Stimmen lädst du in den Abschnitten darunter. Leistung und Parallelität: Einstellungen → Leistung.") {
-                EngineOverviewCard()
-            }
-
-            PillSection("Allgemein") {
-                PillRow(title: "Fallback-Engine", subtitle: "Für neue Importe, wenn keine Standardstimme der Sprache greift.") {
-                    PillPicker(selection: $store.settings.ttsEngine,
-                               options: TTSEngineID.allCases.map { PillOption(value: $0, label: $0.shortName) })
+                PillRow(title: "KI-Anfragen", subtitle: store.settings.llmProvider == .omlx
+                        ? L("Zusammenfassung und Gliederung (oMLX bündelt parallele Anfragen).")
+                        : L("Zusammenfassung und Gliederung (LM Studio arbeitet sie nacheinander ab).")) {
+                    PillStepper(value: Binding(
+                        get: { store.settings.llmProvider == .omlx ? store.settings.omlxParallelRequests : store.settings.lmStudioParallelRequests },
+                        set: { if store.settings.llmProvider == .omlx { store.settings.omlxParallelRequests = $0 } else { store.settings.lmStudioParallelRequests = $0 } }
+                    ), range: 1...8)
                 }
-            }
-
-            PillSection("Hugging Face") {
-                HuggingFaceAccountCard()
-            }
-
-            PillSection("Phonon", footer: "Gradiums Phonon 40m: sehr schnell (mehrere Kapitel parallel auf der CPU), natürliche Stimmen für Deutsch, Englisch, Französisch und Spanisch. Nur nicht-kommerzielle Nutzung (CC BY-NC 4.0). Die Stimmen einer Sprache kommen mit ihrem Modell.") {
-                PillRow(title: "Standardstimme (Phonon)") {
-                    PillPicker(selection: $store.settings.phononVoice,
-                               options: PhononEngine(settings: settingsStore.settings, environment: .shared).availableVoices().map { PillOption(value: $0.id, label: $0.displayName) })
+                PillRow(title: "Bildbeschreibungen", subtitle: "Gleichzeitige Anfragen an das Vision-Modell.") {
+                    PillStepper(value: $store.settings.visionParallelRequests, range: 1...8)
                 }
-                PhononModelsCard()
-            }
-
-            PillSection("Pocket TTS", footer: "Kyutais Pocket TTS: schnell auf der CPU, Deutsch, Englisch, Französisch, Spanisch und Italienisch, dazu lokales Stimmklonen aus einer kurzen Aufnahme. Jede Stimme spricht jede Sprache; die Muttersprachler-Stimme klingt am natürlichsten. CC BY 4.0.") {
-                PillRow(title: "Standardstimme (Pocket TTS)") {
-                    PillPicker(selection: $store.settings.pocketVoice,
-                               options: PocketEngine(settings: settingsStore.settings, environment: .shared).availableVoices().map { PillOption(value: $0.id, label: $0.displayName) })
-                }
-                PillRow(title: "Hohe Qualität (24 Schichten)", subtitle: "Natürlicher, aber etwa dreimal langsamer und 2,4 GB Arbeitsspeicher je Worker. Braucht das jeweilige Modell.") {
-                    PillToggle(isOn: $store.settings.pocketHighQuality)
-                }
-                PocketModelsCard()
             }
 
             PillSection("Speicher-Schutz & RAM-Watchdog", footer: "Überwacht den Arbeitsspeicher während der Audio-Synthese (inklusive aller Hintergrund-Worker), um macOS vor Überlastung zu schützen.") {
@@ -766,61 +814,24 @@ private struct EnginesSettingsPane: View {
                     }
                 }
             }
+        }
+    }
+}
 
-            PillSection("Kokoro") {
-                PillRow(title: "Standardstimme (Kokoro)") {
-                    PillPicker(selection: $store.settings.kokoroVoice,
-                               options: KokoroEngine.standardVoices.map { PillOption(value: $0.id, label: $0.displayName) })
-                }
-                PillRow(title: "Deutsche Stimme (Kokoro Deutsch)") {
-                    SegmentedPills(selection: $store.settings.kokoroGermanVoice, options: [
-                        PillOption(value: "martin", label: "Martin"),
-                        PillOption(value: "victoria", label: "Victoria"),
-                    ])
-                }
-                ModelStatusCard(title: "Kokoro Deutsch — Modelle") {
-                    GermanKokoroModelManagerView(voices: ["martin", "victoria", "thorsten"])
-                }
-                PillRow(title: "Modell-Repository", subtitle: "mlx-audio / Hugging Face") {
-                    TextField("Repo", text: $store.settings.kokoroModelRepo)
-                        .textFieldStyle(.flow)
-                        .frame(width: 280)
-                }
+// MARK: - Engines
+
+private struct EnginesSettingsPane: View {
+    @Environment(SettingsStore.self) private var settingsStore
+
+    var body: some View {
+        @Bindable var store = settingsStore
+        VStack(alignment: .leading, spacing: 30) {
+            PillSection("Installiert", footer: "Jede Engine mit Version und belegtem Platz; aufgeklappt jeder Bestandteil zum Laden oder Entfernen. Stimmen hörst du am besten in der Stimmen-Galerie an und installierst sie dort. Phonon auf der Neural Engine: Im Energiemodus „Stromsparend“ spricht Phonon über die Neural Engine — kaum langsamer, viel sparsamer; je Sprache einmal vorbereiten (~200 MB).") {
+                EngineInventoryList()
             }
 
-            PillSection("Piper") {
-                PillRow(title: "Standardstimme (Piper)") {
-                    PillPicker(selection: $store.settings.piperVoice,
-                               options: PiperVoiceCatalog.allVoices.map { PillOption(value: $0.id, label: $0.displayName) })
-                }
-                ModelStatusCard(title: "Piper-Stimmen") {
-                    PiperVoiceManagerView()
-                }
-            }
-
-            PillSection("Supertonic 3") {
-                PillRow(title: "Standardstimme (Supertonic)") {
-                    PillPicker(selection: $store.settings.supertonicVoice,
-                               options: SupertonicEngine(settings: settingsStore.settings, environment: .shared).availableVoices().map { PillOption(value: $0.id, label: $0.displayName) })
-                }
-                PillRow(title: "Syntheseschritte") {
-                    PillStepper(value: $store.settings.supertonicSteps, range: 1...20)
-                }
-                PillRow(title: "Zeichen pro Segment") {
-                    PillStepper(value: $store.settings.supertonicChunkCharacters, range: 40...300, step: 10)
-                }
-                ModelStatusCard(title: "Supertonic — Modell") {
-                    SupertonicModelManagerView()
-                }
-            }
-
-            PillSection("OmniVoice", footer: "Mehrsprachiges Diffusionsmodell. Weniger Stufen = schneller, mehr = hochwertiger.") {
-                PillRow(title: "Qualitätsstufen") {
-                    PillStepper(value: $store.settings.omniVoiceSteps, range: 4...64, step: 4)
-                }
-                ModelStatusCard(title: "OmniVoice — Modell (2,04 GB)") {
-                    SingleModelManagerView(modelID: "omnivoice-base")
-                }
+            PillSection("Hugging Face", footer: "Phonon und Pocket TTS sind geschützte Modelle: einmal anmelden und je Modell den Nutzungsbedingungen zustimmen.") {
+                HuggingFaceAccountCard()
             }
 
             PillSection("macOS-Systemstimmen", footer: "Schnell, ohne Download in der App, mittlere Qualität. Bessere Stimmen (z. B. „Anna (Premium)“) lädst du in den Systemeinstellungen unter Bedienungshilfen → Gesprochene Inhalte → Systemstimme → Stimmen verwalten; nach einem Neustart der App erscheinen sie hier.") {
@@ -837,21 +848,6 @@ private struct EnginesSettingsPane: View {
                 }
             }
         }
-    }
-}
-
-private struct ModelStatusCard<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L(title)).flowFont(.body, weight: .medium)
-            content
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .flowSurface(cornerRadius: Theme.Radius.row)
     }
 }
 
@@ -876,6 +872,7 @@ extension TTSEngineID {
 
 /// Erscheinungsbild (plan 9.2) — mirrors the template one to one.
 struct AppearanceSettingsSection: View {
+    @Environment(FunCenter.self) private var fun: FunCenter?
     @Environment(SettingsStore.self) private var settingsStore
 
     var body: some View {
@@ -939,11 +936,34 @@ struct AppearanceSettingsSection: View {
                     ])
                 }
             }
+
+            PillSection("Spaß & Easter Eggs", footer: "Kleine Extras mit Anspielungen auf Spiele, Filme und Bücher — alles eigene Sounds und Pixelbilder. Der Pixel-Modus will gut überlegt sein; der Konami-Code führt übrigens auch dorthin.") {
+                PillRow(title: "Soundeffekte", subtitle: "Kurze 8-Bit-Töne: fertiges Hörbuch, Eulenpost, Erfolge, Streicheln.") {
+                    PillToggle(isOn: $store.settings.soundEffectsEnabled)
+                }
+                PillRow(title: "Eulenpost", subtitle: "Eine Eule bringt die Nachricht, wenn ein Hörbuch fertig ist.") {
+                    PillToggle(isOn: $store.settings.owlPostEnabled)
+                }
+                PillRow(title: "Lade-Sprüche", subtitle: "Etwas zu lesen, während die Werkstatt arbeitet.") {
+                    PillToggle(isOn: $store.settings.loadingQuipsEnabled)
+                }
+                PillRow(title: "Sehr langer Hund", subtitle: "Passt die Kapitelleiste nicht mehr ins Fenster, wird sie zum Hals eines Hundes.") {
+                    PillToggle(isOn: $store.settings.lesserDogEnabled)
+                }
+                PillRow(title: "Pixel-Modus", subtitle: "Die ganze App im Look von 1998. Mit Sicherheitsabfrage. Mehreren.") {
+                    PillToggle(isOn: Binding(
+                        get: { store.settings.pixelMode },
+                        set: { on in if on { fun?.requestPixelMode() } else { store.settings.pixelMode = false } }
+                    ))
+                }
+                AchievementsGrid(unlocked: store.settings.unlockedAchievements, dogPets: store.settings.dogPets)
+            }
         }
     }
 }
 
-/// Deutsch / English / System, applied on relaunch (macOS loads the app's
+/// System or one of the app languages (v4: + Français, Español,
+/// Italiano), applied on relaunch (macOS loads the app's
 /// language at start); the restart button relaunches immediately.
 private struct LanguageRow: View {
     @Environment(SettingsStore.self) private var settingsStore
@@ -951,13 +971,7 @@ private struct LanguageRow: View {
 
     private var pendingRestart: Bool {
         let chosen = settingsStore.settings.appLanguage
-        let effective: String = {
-            switch chosen {
-            case .de: return "de"
-            case .en: return "en"
-            case .system: return Locale.preferredLanguages.first.map { $0.hasPrefix("de") ? "de" : "en" } ?? "en"
-            }
-        }()
+        let effective = chosen == .system ? AppLanguage.resolvedSystemLanguage() : chosen.rawValue
         return effective != launchedWith
     }
 
@@ -965,11 +979,9 @@ private struct LanguageRow: View {
         @Bindable var store = settingsStore
         PillRow(title: "App-Sprache", subtitle: pendingRestart ? "Wird nach dem Neustart übernommen." : "„System“ folgt der Sprache deines Macs.") {
             HStack(spacing: 10) {
-                SegmentedPills(selection: $store.settings.appLanguage, options: [
-                    PillOption(value: AppLanguage.system, label: "System", systemImage: "globe"),
-                    PillOption(value: AppLanguage.de, label: "Deutsch", verbatim: true),
-                    PillOption(value: AppLanguage.en, label: "English", verbatim: true),
-                ])
+                PillPicker(selection: $store.settings.appLanguage, options:
+                    [PillOption(value: AppLanguage.system, label: "System", systemImage: "globe")]
+                    + AppLanguage.concrete.map { PillOption(value: $0, label: $0.displayName, verbatim: true) })
                 if pendingRestart {
                     Button("Neu starten") { relaunch() }
                         .buttonStyle(FlowButtonStyle(variant: .prominent, size: .small))
@@ -1018,7 +1030,7 @@ private struct AppearancePreview: View {
     private func previewCard(_ title: String, _ subtitle: String, _ image: String, prominent: Bool) -> some View {
         HStack(spacing: 12) {
             Image(systemName: image)
-                .font(.system(size: 17, weight: .semibold))
+                .appFont(size: 17, weight: .semibold)
                 .foregroundStyle(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint))
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(prominent ? AnyShapeStyle(.tint) : AnyShapeStyle(.tint.opacity(0.14))))
@@ -1034,213 +1046,43 @@ private struct AppearancePreview: View {
     }
 }
 
-// MARK: - Model managers (engines pane)
-
-private struct GermanKokoroModelManagerView: View {
-    let voices: [String]
-    private let manager = GermanKokoroEnvironmentManager.shared
-    @State private var installing: String?
-    @State private var message: String?
+/// Unlocked and still hidden achievements (v4.3).
+private struct AchievementsGrid: View {
+    let unlocked: [String: Date]
+    let dogPets: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(voices, id: \.self) { voice in
-                HStack {
-                    Text(voice.capitalized).flowFont(.body)
-                    Spacer()
-                    if manager.isVoiceReady(voice) {
-                        StatusBadge(text: "Bereit", systemImage: "checkmark.circle.fill", tint: .green)
-                    } else {
-                        Button(installing == voice ? "Installiere …" : "Installieren") { install(voice) }
-                            .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                            .disabled(installing != nil)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Erfolge").flowFont(.body, weight: .semibold)
+                Spacer()
+                Text(String(format: L("%d von %d"), unlocked.count, Achievement.allCases.count))
+                    .flowFont(.caption).foregroundStyle(.secondary)
             }
-            if let message { Text(message).flowFont(.caption).foregroundStyle(.secondary) }
-        }
-    }
-
-    private func install(_ voice: String) {
-        installing = voice
-        message = "Lade und konvertiere \(voice) …"
-        Task {
-            do {
-                try await manager.install(voice) { line in
-                    Task { @MainActor in message = line }
-                }
-                installing = nil
-                message = "\(voice.capitalized) ist bereit."
-            } catch {
-                installing = nil
-                message = error.localizedDescription
-            }
-        }
-    }
-}
-
-private struct SupertonicModelManagerView: View {
-    private let manager = SupertonicEnvironmentManager.shared
-    @State private var installing = false
-    @State private var message: String?
-
-    var body: some View {
-        HStack {
-            if manager.isReady() {
-                StatusBadge(text: "Supertonic 3 bereit", systemImage: "checkmark.circle.fill", tint: .green)
-            } else {
-                Button(installing ? "Installiere …" : "Modell und Laufzeit installieren") { install() }
-                    .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                    .disabled(installing)
-            }
-            Spacer()
-            if let message { Text(message).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2) }
-        }
-    }
-
-    private func install() {
-        installing = true
-        message = "Lade Supertonic 3 …"
-        Task {
-            do {
-                try await manager.install { line in Task { @MainActor in message = line } }
-                installing = false
-                message = "Supertonic 3 ist bereit."
-            } catch {
-                installing = false
-                message = error.localizedDescription
-            }
-        }
-    }
-}
-
-private struct PiperVoiceManagerView: View {
-    private let environment = PiperEnvironmentManager.shared
-    @State private var downloadProgress: [String: Double] = [:]
-    @State private var downloadedFlags: [String: Bool] = [:]
-    @State private var errorMessage: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(PiperVoiceCatalog.allVoices) { voice in
-                HStack {
-                    Text(voice.displayName).flowFont(.body)
-                    Spacer()
-                    if let progress = downloadProgress[voice.id] {
-                        ProgressRing(fraction: progress, lineWidth: 2.5).frame(width: 18, height: 18)
-                    } else if isDownloaded(voice) {
-                        StatusBadge(text: "Geladen", systemImage: "checkmark.circle.fill", tint: .green)
-                    } else {
-                        Button {
-                            download(voice)
-                        } label: {
-                            Label("~60 MB", systemImage: "arrow.down.circle")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 8)], spacing: 8) {
+                ForEach(Achievement.allCases) { achievement in
+                    let done = unlocked[achievement.rawValue] != nil
+                    HStack(spacing: 10) {
+                        Image(systemName: done ? achievement.systemImage : "lock.fill")
+                            .frame(width: 24)
+                            .foregroundStyle(done ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: done ? achievement.title : "???").flowFont(.callout, weight: .semibold)
+                            Text(verbatim: done ? achievement.detail : L("Noch nicht freigeschaltet"))
+                                .flowFont(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         }
-                        .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                        .disabled(!environment.isEnvironmentReady())
+                        Spacer(minLength: 0)
                     }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(done ? 0.05 : 0.025)))
                 }
             }
-            if !environment.isEnvironmentReady() {
-                Text("Die Piper-Umgebung wird zuerst unter „Diagnose“ eingerichtet.")
-                    .flowFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let errorMessage {
-                Text(errorMessage).flowFont(.caption).foregroundStyle(.red)
+            if dogPets > 0 {
+                Text(String(format: L("Den Hund %d-mal gestreichelt."), dogPets))
+                    .flowFont(.caption).foregroundStyle(.tertiary)
             }
         }
-        .onAppear { refresh() }
-    }
-
-    private func isDownloaded(_ voice: PiperVoice) -> Bool {
-        downloadedFlags[voice.id] ?? environment.isVoiceDownloaded(voice.id)
-    }
-
-    private func refresh() {
-        for voice in PiperVoiceCatalog.allVoices {
-            downloadedFlags[voice.id] = environment.isVoiceDownloaded(voice.id)
-        }
-    }
-
-    private func download(_ voice: PiperVoice) {
-        downloadProgress[voice.id] = 0.01
-        Task {
-            do {
-                try await environment.downloadVoice(voice) { progress in
-                    Task { @MainActor in downloadProgress[voice.id] = progress }
-                }
-                downloadProgress[voice.id] = nil
-                downloadedFlags[voice.id] = true
-            } catch {
-                downloadProgress[voice.id] = nil
-                errorMessage = "Download fehlgeschlagen: \(error.localizedDescription)"
-            }
-        }
+        .padding(18)
+        .flowSurface(cornerRadius: Theme.Radius.row)
     }
 }
-
-private struct SingleModelManagerView: View {
-    let modelID: String
-    private let manager = ModelManager.shared
-    @State private var installing = false
-    @State private var message: String?
-    @State private var isReady = false
-
-    private var item: ModelItem? {
-        manager.availableModels.first { $0.id == modelID }
-    }
-
-    var body: some View {
-        HStack {
-            if isReady {
-                StatusBadge(text: "Bereit", systemImage: "checkmark.circle.fill", tint: .green)
-                Button("Entfernen") { delete() }
-                    .buttonStyle(FlowButtonStyle(variant: .subtle, size: .small))
-            } else {
-                Button(installing ? "Lade herunter …" : "Modell herunterladen (\(item?.sizeFormatted ?? ""))") {
-                    install()
-                }
-                .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
-                .disabled(installing)
-            }
-            Spacer()
-            if let message {
-                Text(message).flowFont(.caption).foregroundStyle(.secondary).lineLimit(2)
-            }
-        }
-        .onAppear { updateReady() }
-    }
-
-    private func updateReady() {
-        if let item { isReady = manager.isInstalled(item) }
-    }
-
-    private func install() {
-        guard let item else { return }
-        installing = true
-        message = "Starte Download …"
-        Task {
-            do {
-                try await manager.install(item) { line in
-                    Task { @MainActor in message = line }
-                }
-                installing = false
-                updateReady()
-                message = "\(item.title) ist bereit."
-            } catch {
-                installing = false
-                updateReady()
-                message = error.localizedDescription
-            }
-        }
-    }
-
-    private func delete() {
-        guard let item else { return }
-        try? manager.delete(item)
-        updateReady()
-        message = "Modell entfernt."
-    }
-}
-

@@ -1,11 +1,16 @@
 import Foundation
 import AVFoundation
 
-/// Streams raw 16-bit PCM through ffmpeg in a single pass — optional EBU
-/// R128 loudness normalization plus the final codec encode — so chapter
-/// audio never exists as a large uncompressed WAV on disk. PCM is fed
-/// straight into ffmpeg's stdin; only the small compressed result is
-/// written to the chapter directory.
+/// Streams raw 16-bit PCM through ffmpeg — optional clean-up and loudness
+/// normalization plus the final codec encode — so chapter audio never
+/// exists as a large uncompressed WAV on disk. PCM is fed straight into
+/// ffmpeg's stdin.
+///
+/// v4.4: calm normalization needs the chapter's loudness before it can set
+/// one fixed gain, so the stream first lands in a small lossless FLAC next
+/// to the chapter (~2.8 MB per minute, deleted right after), is measured,
+/// and then encoded once. Dynamic normalization and no normalization stay
+/// a single pass.
 ///
 /// Two feeding modes:
 /// - Swift forwards PCM chunks itself (`write(_:)`, used by PiperEngine).
@@ -55,23 +60,42 @@ final class ChapterAudioEncoder: @unchecked Sendable {
             "-f", "s16le", "-ar", String(max(1, sampleRate)), "-ac", "1",
             "-i", inputSpecifier,
         ]
-        if settings.loudnessNormalizationEnabled {
-            arguments += ["-af", "loudnorm=I=\(settings.loudnessTargetLUFS):TP=\(settings.loudnessTruePeakDB):LRA=\(settings.loudnessRangeLU)"]
+        let filters = AudioPolish.streamingFilters(settings)
+        if !filters.isEmpty {
+            arguments += ["-af", filters.joined(separator: ",")]
         }
-        switch outputURL.pathExtension.lowercased() {
-        case "m4a":
-            arguments += ["-c:a", "aac", "-b:a", "\(max(16, settings.chapterAudioBitrateKbps))k", "-f", "ipod", outputURL.path]
-        case "mp3":
-            arguments += ["-c:a", "libmp3lame", "-qscale:a", String(settings.mp3Quality), outputURL.path]
-        default:
-            throw EncoderError.unsupportedOutput(outputURL.pathExtension)
+        if AudioPolish.usesCalmPass(settings) {
+            // Validate the extension now, not after the whole chapter streamed.
+            _ = try AudioPolish.codecArguments(for: outputURL, settings: settings)
+            arguments += ["-c:a", "flac", stageURL(for: outputURL).path]
+        } else {
+            arguments += try AudioPolish.codecArguments(for: outputURL, settings: settings)
         }
         return arguments
+    }
+
+    /// The lossless stage file of the calm pass, next to the chapter.
+    static func stageURL(for outputURL: URL) -> URL {
+        outputURL.deletingPathExtension().appendingPathExtension("stage.flac")
+    }
+
+    /// Second half of the calm pass: measure the stage, encode it once with
+    /// a fixed gain and the peak limiter, delete the stage.
+    static func encodeCalm(stage: URL, outputURL: URL, settings: AppSettings) async throws {
+        guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settings) else { throw PackagerError.ffmpegNotFound }
+        defer { try? FileManager.default.removeItem(at: stage) }
+        let loudness = try await AudioPolish.measureLoudness(of: stage, ffmpeg: ffmpeg)
+        let gain = AudioPolish.calmGain(measuredLUFS: loudness.integratedLUFS, targetLUFS: settings.loudnessTargetLUFS)
+        let arguments = ["-y", "-hide_banner", "-loglevel", "error", "-i", stage.path,
+                         "-af", AudioPolish.calmFilter(gainDB: gain, truePeakDB: settings.loudnessTruePeakDB)]
+            + (try AudioPolish.codecArguments(for: outputURL, settings: settings))
+        try await FFmpegRunner.run(executable: ffmpeg, arguments: arguments)
     }
 
     private let process: Process
     private let stdinPipe: Pipe
     private let outputURL: URL
+    private let settings: AppSettings
     private let state = LockedBox<EncoderState>(EncoderState())
 
     private struct EncoderState {
@@ -101,6 +125,7 @@ final class ChapterAudioEncoder: @unchecked Sendable {
             throw PackagerError.ffmpegNotFound
         }
         self.outputURL = outputURL
+        self.settings = settings
         self.process = Process()
         self.process.executableURL = ffmpeg
         self.process.arguments = try Self.arguments(sampleRate: sampleRate, outputURL: outputURL, settings: settings)
@@ -165,9 +190,23 @@ final class ChapterAudioEncoder: @unchecked Sendable {
         }
 
         let (status, lines) = state.withLock { ($0.exitStatus, $0.errorLines) }
+        let stage = Self.stageURL(for: outputURL)
         guard status == 0 else {
             try? FileManager.default.removeItem(at: outputURL)
+            try? FileManager.default.removeItem(at: stage)
             throw EncoderError.ffmpegFailed(lines.joined(separator: "\n"))
+        }
+        if AudioPolish.usesCalmPass(settings) {
+            guard let size = try? FileManager.default.attributesOfItem(atPath: stage.path)[.size] as? Int, size > 1000 else {
+                try? FileManager.default.removeItem(at: stage)
+                throw EncoderError.noAudio
+            }
+            do {
+                try await Self.encodeCalm(stage: stage, outputURL: outputURL, settings: settings)
+            } catch {
+                try? FileManager.default.removeItem(at: outputURL)
+                throw error
+            }
         }
         guard let size = try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int, size > 1000 else {
             try? FileManager.default.removeItem(at: outputURL)
@@ -184,5 +223,6 @@ final class ChapterAudioEncoder: @unchecked Sendable {
             process.terminate()
         }
         try? FileManager.default.removeItem(at: outputURL)
+        try? FileManager.default.removeItem(at: Self.stageURL(for: outputURL))
     }
 }

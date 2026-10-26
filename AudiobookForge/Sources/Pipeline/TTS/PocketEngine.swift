@@ -86,6 +86,7 @@ struct PocketEngine: TTSEngine {
         return try await PCMBridgeRunner.run(
             executable: environment.pythonExecutableURL,
             arguments: ["-I", script.path, "--plan", planURL.path, "--variant", variant, "--lang", language, "--threads", "1",
+                        "--temperature", String(format: "%.3f", settings.pocketTemperature),
                         "--segments-json", segmentsURL.path] + voiceArguments,
             environment: environment.processEnvironment(),
             segmentsURL: segmentsURL,

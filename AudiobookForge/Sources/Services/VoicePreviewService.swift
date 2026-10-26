@@ -15,6 +15,9 @@ actor VoicePreviewService {
         let voiceID: VoiceID
         let speed: Double
         let text: String
+        /// Expression setting the sample was rendered with (v4.2), so a
+        /// changed slider renders anew instead of replaying the cache.
+        var expression: Double = 0
     }
 
     /// AVAudioPCMBuffer is not Sendable; previews are only ever consumed
@@ -38,7 +41,7 @@ actor VoicePreviewService {
     }
 
     private func cacheKey(_ request: Request) -> NSString {
-        "\(request.voiceID.engine.rawValue):\(request.voiceID.voice):\(Int(request.speed * 100)):\(request.text.hashValue)" as NSString
+        "\(request.voiceID.engine.rawValue):\(request.voiceID.voice):\(Int(request.speed * 100)):\(Int(request.expression * 1000)):\(request.text.hashValue)" as NSString
     }
 
     func cachedBuffer(for request: Request) -> PreviewBuffer? {

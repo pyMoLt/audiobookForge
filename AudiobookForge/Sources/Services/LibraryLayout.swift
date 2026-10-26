@@ -65,6 +65,13 @@ enum LibraryLayout {
         textDirectory(root, bookID: bookID).appendingPathComponent("raw.json")
     }
 
+    /// Previous narration while re-voicing (v4): with the texts, not in
+    /// book.json — it changes only at start/end of the run, while
+    /// book.json is rewritten on every chapter update.
+    static func revoiceBackupURL(_ root: URL, bookID: UUID) -> URL {
+        textDirectory(root, bookID: bookID).appendingPathComponent("revoice-backup.json")
+    }
+
     static func coverURL(_ root: URL, bookID: UUID) -> URL {
         bookDirectory(root, bookID: bookID).appendingPathComponent("cover.jpg")
     }
@@ -242,10 +249,6 @@ enum LibraryLayout {
         var folderID: UUID?
         var ambientSound: String?
         var ambientVolumePercent: Int?
-        /// Previous narration while re-voicing (v4) — must survive a crash
-        /// so the old version can still be restored. Only present during
-        /// a re-voicing run.
-        var revoiceBackup: RevoiceBackup?
         /// `sourceChapters` are identical to `rawImportedChapters` — only
         /// `text/raw.json` exists and both sides read from it.
         var sourceChaptersSameAsRaw: Bool = false
@@ -285,7 +288,6 @@ enum LibraryLayout {
             folderID = book.folderID
             ambientSound = book.ambientSound
             ambientVolumePercent = book.ambientVolumePercent
-            revoiceBackup = book.revoiceBackup
             sourceChaptersSameAsRaw = book.sourceChapters != nil
                 && book.sourceChapters == book.rawImportedChapters
         }
@@ -326,7 +328,6 @@ enum LibraryLayout {
             folderID = try c.decodeIfPresent(UUID.self, forKey: .folderID)
             ambientSound = try c.decodeIfPresent(String.self, forKey: .ambientSound)
             ambientVolumePercent = try c.decodeIfPresent(Int.self, forKey: .ambientVolumePercent)
-            revoiceBackup = try c.decodeIfPresent(RevoiceBackup.self, forKey: .revoiceBackup)
             sourceChaptersSameAsRaw = try c.decodeIfPresent(Bool.self, forKey: .sourceChaptersSameAsRaw) ?? false
         }
 
@@ -369,7 +370,6 @@ enum LibraryLayout {
             book.folderID = folderID
             book.ambientSound = ambientSound
             book.ambientVolumePercent = ambientVolumePercent
-            book.revoiceBackup = revoiceBackup
             return book
         }
     }
@@ -445,6 +445,10 @@ enum LibraryLayout {
            let source = try? JSONDecoder().decode([Chapter].self, from: data) {
             book.sourceChapters = source
         }
+        if let data = try? Data(contentsOf: revoiceBackupURL(root, bookID: bookID)),
+           let backup = try? JSONDecoder().decode(RevoiceBackup.self, from: data) {
+            book.revoiceBackup = backup
+        }
         if let data = try? Data(contentsOf: coverURL(root, bookID: bookID)) {
             book.coverImageData = data
         }
@@ -466,6 +470,7 @@ enum LibraryLayout {
         }
         if book.sourceChapters != persisted.sourceChapters { return true }
         if book.rawImportedChapters != persisted.rawImportedChapters { return true }
+        if book.revoiceBackup != persisted.revoiceBackup { return true }
         return false
     }
 
@@ -507,6 +512,11 @@ enum LibraryLayout {
                 try? FileManager.default.removeItem(at: sourceChaptersURL(root, bookID: bookID))
             }
             try encodeChapterTexts(book).write(to: chapterTextsURL(root, bookID: bookID), options: .atomic)
+            if let backup = book.revoiceBackup {
+                try encoder.encode(backup).write(to: revoiceBackupURL(root, bookID: bookID), options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: revoiceBackupURL(root, bookID: bookID))
+            }
             rewroteTexts = true
         }
         return rewroteTexts

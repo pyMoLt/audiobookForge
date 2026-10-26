@@ -99,6 +99,22 @@ struct DebugAutomationReceiver: ViewModifier {
                 if let power = info["power"], let mode = PowerMode(rawValue: power) {
                     settingsStore.settings.powerModeOnAdapter = mode
                 }
+                if let value = info["phononEnglish31m"] { settingsStore.settings.phononEnglish31m = value == "1" }
+                // Visual pass v4.3: pixel=1|0 (no achievement), workshop=<title>:<ready>
+                // shows a test book paused with <ready> chapters done.
+                if let value = info["pixel"] { settingsStore.settings.pixelMode = value == "1" }
+                if let spec = info["workshop"], let colon = spec.lastIndex(of: ":"), let ready = Int(spec[spec.index(after: colon)...]),
+                   var book = libraryStore.books.first(where: { Self.matches($0, String(spec[..<colon])) }) {
+                    let ids = book.sortedChapters.map(\.id)
+                    for (index, id) in ids.enumerated() {
+                        if let real = book.chapters.firstIndex(where: { $0.id == id }) {
+                            book.chapters[real].audioStatus = index < ready ? .ready : (index < ready + 3 ? .synthesizing : .pending)
+                        }
+                    }
+                    book.status = .paused
+                    libraryStore.upsert(book)
+                    selection = .book(book.id)
+                }
                 if let appearance = info["appearance"], let mode = AppearanceMode(rawValue: appearance) {
                     settingsStore.settings.appearanceMode = mode
                 }
@@ -170,7 +186,96 @@ struct DebugAutomationReceiver: ViewModifier {
                 if let title = info["revoiceSheet"], let book = libraryStore.books.first(where: { Self.matches($0, title) }) {
                     NotificationCenter.default.post(name: .openRevoice, object: book.id)
                 }
-                if info["revoiceSheet"] == "close" { NSApp.keyWindow?.sheets.forEach { NSApp.keyWindow?.endSheet($0) } }
+                if info["revoiceSheet"] == "close" {
+                    for window in NSApp.windows { window.sheets.reversed().forEach { window.endSheet($0) } }
+                }
+                // v4: link a book to its moved M4B and free the chapter cache.
+                if let title = info["relinkBook"], let file = info["file"],
+                   let book = libraryStore.book(id: libraryStore.books.first(where: { Self.matches($0, title) })?.id ?? UUID()) {
+                    Task {
+                        guard let ffmpeg = await FFmpegLocator.resolveAsync(settings: settingsStore.settings),
+                              let result = await ChapterAudioCleanup.releaseChapterAudio(book: book, packagedURL: URL(fileURLWithPath: file), ffmpeg: ffmpeg,
+                                                                                         chapterAudioRoot: AppPaths.chapterAudioRoot) else {
+                            try? "relink: nicht möglich".write(toFile: "/tmp/abf-relink.log", atomically: true, encoding: .utf8); return
+                        }
+                        if result.verified { libraryStore.upsert(result.book); libraryStore.flush() }
+                        try? result.messages.joined(separator: "\n").write(toFile: "/tmp/abf-relink.log", atomically: true, encoding: .utf8)
+                    }
+                }
+                if let language = info["prepareNeural"] {
+                    Task {
+                        let result: String
+                        do { try await PhononEnvironmentManager.shared.prepareNeuralEngine(language) { _ in }; result = "ok" }
+                        catch { result = error.localizedDescription }
+                        try? result.write(toFile: "/tmp/abf-neural.log", atomically: true, encoding: .utf8)
+                    }
+                }
+                // v4.2: the gallery's install path, end to end:
+                // installVoice=<engine>:<voice> [removeAfter=1] → /tmp/abf-install.log
+                if let spec = info["installVoice"], let colon = spec.firstIndex(of: ":"),
+                   let engine = TTSEngineID(rawValue: String(spec[..<colon])) {
+                    let voice = VoiceID(engine: engine, voice: String(spec[spec.index(after: colon)...]))
+                    let settings = settingsStore.settings
+                    let removeAfter = info["removeAfter"] == "1"
+                    Task { @MainActor in
+                        var log: [String] = []
+                        let missing = await Task.detached { EngineInventory.missingComponents(for: voice, settings: settings) }.value
+                        log.append("MISSING " + missing.map(\.id).joined(separator: ","))
+                        do {
+                            try await ComponentRunner.install(missing) { index, text in
+                                if text.hasPrefix(L("Lädt")) == false { log.append("STEP \(index) \(text)") }
+                            }
+                            let after = await Task.detached { EngineInventory.missingComponents(for: voice, settings: settings) }.value
+                            log.append("AFTER " + (after.isEmpty ? "complete" : after.map(\.id).joined(separator: ",")))
+                            if removeAfter {
+                                for component in missing.reversed() where component.kind != .runtime {
+                                    let fresh = await Task.detached { EngineInventory.status(of: engine, settings: settings).components.first { $0.id == component.id } }.value
+                                    if let fresh { try await ComponentRunner.remove(fresh) }
+                                }
+                                let removed = await Task.detached { EngineInventory.missingComponents(for: voice, settings: settings) }.value
+                                log.append("REMOVED " + removed.map(\.id).joined(separator: ","))
+                            }
+                            log.append("DONE")
+                        } catch {
+                            log.append("ERROR \(error.localizedDescription)")
+                        }
+                        try? log.joined(separator: "\n").write(toFile: "/tmp/abf-install.log", atomically: true, encoding: .utf8)
+                    }
+                }
+                // neuralSpeak=<model>:<voice> → /tmp/abf-neural-speak.log (samples, seconds)
+                if let spec = info["neuralSpeak"], let colon = spec.firstIndex(of: ":") {
+                    let model = String(spec[..<colon]), voice = String(spec[spec.index(after: colon)...])
+                    Task {
+                        let samples = LockedBox(0)
+                        let start = Date()
+                        var result: String
+                        do {
+                            try await PhononNeuralEngine.shared.synthesize(
+                                segments: ["This is a short test of the smaller model on the Neural Engine."], voice: voice,
+                                language: PhononEnvironmentManager.language(ofModel: model),
+                                directory: PhononEnvironmentManager.shared.neuralDirectory(for: model)
+                            ) { _, chunk in samples.withLock { $0 += chunk.count } }
+                            result = String(format: "samples %d audio %.2fs took %.2fs", samples.withLock { $0 }, Double(samples.withLock { $0 }) / 24000, Date().timeIntervalSince(start))
+                        } catch { result = "ERROR \(error.localizedDescription)" }
+                        try? result.write(toFile: "/tmp/abf-neural-speak.log", atomically: true, encoding: .utf8)
+                    }
+                }
+                // windowInfo=1 → /tmp/abf-windows.log: every window and sheet,
+                // its size and whether the user can resize it.
+                // sheetSize=WxH: resizes the open sheet like a drag on its edge.
+                if let size = info["sheetSize"], let sheet = NSApp.windows.first(where: { $0.isVisible && $0.isSheet }) {
+                    let parts = size.split(separator: "x").compactMap { Double($0) }
+                    if parts.count == 2 { sheet.setContentSize(NSSize(width: parts[0], height: parts[1])) }
+                }
+                if info["windowInfo"] != nil {
+                    let lines = NSApp.windows.filter(\.isVisible).map { window in
+                        String(format: "%@ sheet=%d resizable=%d size=%.0fx%.0f min=%.0fx%.0f max=%.0fx%.0f",
+                               window.className, window.isSheet ? 1 : 0, window.styleMask.contains(.resizable) ? 1 : 0,
+                               window.frame.width, window.frame.height, window.minSize.width, window.minSize.height,
+                               window.maxSize.width, window.maxSize.height)
+                    }
+                    try? lines.joined(separator: "\n").write(toFile: "/tmp/abf-windows.log", atomically: true, encoding: .utf8)
+                }
                 if let dir = info["buildSamples"] {
                     let settings = settingsStore.settings
                     let only = info["engines"].map { Set($0.split(separator: ",").compactMap { TTSEngineID(rawValue: String($0)) }) }

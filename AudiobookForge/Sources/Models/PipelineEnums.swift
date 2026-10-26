@@ -19,6 +19,24 @@ enum ProcessingMode: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// How chapter loudness is evened out (v4.4).
+enum LoudnessMode: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// One fixed gain per chapter plus a peak limiter: the voice stays as
+    /// the engine made it.
+    case calm
+    /// EBU R128 loudnorm: rides the gain continuously (the pre-4.4 way).
+    case dynamic
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .calm: return L("Ruhig")
+        case .dynamic: return L("Dynamisch")
+        }
+    }
+}
+
 enum OutputFormat: String, Codable, CaseIterable, Sendable, Identifiable {
     case m4b
     case m4a
@@ -195,6 +213,19 @@ extension TTSEngineID {
         case .supertonic3: return L("Supertonic 3 (MLX): extrem schnell, gut für lange Sachtexte.")
         case .omniVoice: return L("OmniVoice: Diffusionsmodell mit 600+ Sprachen und Stimmklonen, langsamer, ~2 GB.")
         case .appleSystem: return L("macOS-Systemstimmen: ohne Download, mittlere Qualität; Premium-Stimmen in den Systemeinstellungen.")
+        }
+    }
+
+    /// Model license in one line (v4.1), shown on the gallery's engine card.
+    var license: String {
+        switch self {
+        case .phonon: return L("Lizenz: CC BY-NC 4.0 — nur nicht-kommerziell; Englisch 31M: Apache 2.0")
+        case .pocketTTS: return L("Lizenz: CC BY 4.0 — Namensnennung (Kyutai)")
+        case .kokoro, .kokoroGerman: return L("Lizenz: Apache 2.0")
+        case .kokoroThorsten: return L("Lizenz: CC0 (Thorsten-Voice)")
+        case .piper: return L("Lizenz: je nach Stimme (meist MIT oder CC)")
+        case .supertonic3, .omniVoice: return L("Lizenz: siehe Modellkarte")
+        case .appleSystem: return L("Lizenz: macOS-Systemstimmen")
         }
     }
 }

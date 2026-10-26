@@ -3,6 +3,10 @@ import Foundation
 @testable import AudiobookForge
 
 final class OMLXLiveEndpointTests: XCTestCase {
+    override func setUpWithError() throws {
+        try LiveTestGate.require("oMLX-Live-Test")
+    }
+
     private func makeSettings() -> AppSettings {
         var settings = AppSettings()
         settings.llmProvider = .omlx

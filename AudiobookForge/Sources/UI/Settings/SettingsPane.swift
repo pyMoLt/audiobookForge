@@ -82,32 +82,32 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// these (plan 9.3: "Timeout" finds the connection/request timeouts).
     var keywords: String {
         switch self {
-        case .voices: return "stimme stimmen galerie standard deutsch englisch klon klonen aufnahme hörprobe probe sprache"
-        case .speech: return "sprechfluss pause satz absatz überschrift liste kapitel tempo geschwindigkeit kokoro piper supertonic omnivoice jitter"
+        case .voices: return "stimme stimmen galerie standard deutsch englisch klon klonen aufnahme hörprobe probe sprache andere sprachen fallback ersatz installieren"
+        case .speech: return "sprechfluss pause satz absatz überschrift liste kapitel tempo geschwindigkeit kokoro piper supertonic omnivoice jitter ausdruck lebendig ruhig temperatur lebendigkeit qualität schichten syntheseschritte phonon pocket"
         case .output: return "ausgabe format m4b mp3 aac bitrate ordner zielordner lautheit lufs normalisieren kapitel-audio qualität"
         case .text: return "text kapitel kopfzeile fußzeile fußnoten box label nummern dokumenttyp paper buch report literatur aufteilen gliederung"
         case .ai: return "ki llm sprachmodell omlx lm studio endpoint server verbindung timeout antwort modell zusammenfassung prompt vorlagen kontext"
         case .images: return "bild bilder abbildung vision beschreibung grafik diagramm"
-        case .appearance: return "erscheinungsbild hell dunkel textgröße schrift akzent farbe glas bewegung hintergrund sidebar gruppierung"
-        case .engines: return "engine engines modell modelle download herunterladen hugging face token lizenz laufzeit fallback kokoro piper supertonic omnivoice phonon pocket"
+        case .appearance: return "erscheinungsbild hell dunkel textgröße schrift akzent farbe glas bewegung hintergrund sidebar gruppierung spaß easter egg pixel konami sound töne eule erfolge hund"
+        case .engines: return "engine engines modell modelle download herunterladen hugging face token lizenz laufzeit version installiert entfernen löschen deinstallieren platz speicher neural engine kokoro piper supertonic omnivoice phonon pocket"
         case .performance: return "leistung energie akku netzteil batterie worker parallel parallelität gleichzeitig ki anfragen bild ram speicher watchdog schnell"
-        case .diagnostics: return "diagnose umgebung ffmpeg bridge python abhängigkeiten log protokoll pfad"
+        case .diagnostics: return "diagnose umgebung ffmpeg bridge python abhängigkeiten log protokoll pfad cache zwischenspeicher aufräumen quelle repository"
         }
     }
 
     /// English search words (the UI can run in English).
     var englishKeywords: String {
         switch self {
-        case .voices: return "voice voices gallery default german english clone recording sample preview"
-        case .speech: return "speech pause pauses sentence paragraph heading tempo speed rhythm"
-        case .output: return "output format folder bitrate loudness quality export"
+        case .voices: return "voice voices gallery default german english clone recording sample preview other languages fallback install"
+        case .speech: return "speech pause pauses sentence paragraph heading tempo speed rhythm expression lively calm temperature quality layers steps"
+        case .output: return "output format folder bitrate loudness quality export normalization enhancement aufbereitung"
         case .text: return "text chapter header footer footnotes box labels numbers document type split cleanup"
         case .ai: return "ai llm model server connection timeout summary prompt templates context thinking"
         case .images: return "image images figure vision description diagram"
-        case .appearance: return "appearance light dark text size accent color glass motion background language"
-        case .engines: return "engine engines model models download hugging face token license runtime fallback phonon pocket"
+        case .appearance: return "appearance light dark text size accent color glass motion background language fun easter egg pixel konami sound owl achievements dog"
+        case .engines: return "engine engines model models download hugging face token license runtime version installed remove delete uninstall space storage neural engine phonon pocket"
         case .performance: return "performance energy battery adapter worker parallel concurrency requests memory ram watchdog speed"
-        case .diagnostics: return "diagnostics environment dependencies log path setup"
+        case .diagnostics: return "diagnostics environment dependencies log path cache cleanup source repository"
         }
     }
 

@@ -60,6 +60,48 @@ final class ChapterAudioEncoderTests: XCTestCase {
         XCTAssertTrue(wavFiles.isEmpty, "No WAV intermediate may be created")
     }
 
+    /// v4.4 calm pass: the lossless stage is gone afterwards, and the
+    /// chapter lands near the target loudness at the engine's sample rate.
+    func testCalmPassHitsTargetAndRemovesStage() async throws {
+        guard let ffmpeg = FFmpegLocator.resolve(settings: settings) else {
+            throw XCTSkip("ffmpeg not found on this machine")
+        }
+        XCTAssertEqual(settings.loudnessMode, .calm)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("encoder-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let outputURL = directory.appendingPathComponent("000.mp3")
+        let encoder = try ChapterAudioEncoder.start(sampleRate: 24000, outputURL: outputURL, settings: settings, stdinPipe: Pipe())
+        try encoder.write(sinePCM(seconds: 4.0, sampleRate: 24000, amplitude: 0.05))
+        let duration = try await encoder.finish()
+
+        XCTAssertEqual(duration, 4.0, accuracy: 0.15)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ChapterAudioEncoder.stageURL(for: outputURL).path), "The stage file must be removed")
+        let loudness = try await AudioPolish.measureLoudness(of: outputURL, ffmpeg: ffmpeg)
+        XCTAssertEqual(loudness.integratedLUFS ?? -99, settings.loudnessTargetLUFS, accuracy: 1.5)
+        XCTAssertLessThanOrEqual(loudness.truePeakDB ?? 0, settings.loudnessTruePeakDB + 1.0)
+    }
+
+    func testDynamicModeStaysSinglePass() async throws {
+        guard FFmpegLocator.resolve(settings: settings) != nil else {
+            throw XCTSkip("ffmpeg not found on this machine")
+        }
+        settings.loudnessMode = .dynamic
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("encoder-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let outputURL = directory.appendingPathComponent("000.m4a")
+        let arguments = try ChapterAudioEncoder.arguments(sampleRate: 24000, outputURL: outputURL, settings: settings)
+        XCTAssertTrue(arguments.contains { $0.contains("loudnorm=") })
+        XCTAssertFalse(arguments.contains { $0.hasSuffix(".stage.flac") })
+        let encoder = try ChapterAudioEncoder.start(sampleRate: 24000, outputURL: outputURL, settings: settings, stdinPipe: Pipe())
+        try encoder.write(sinePCM(seconds: 2.0, sampleRate: 24000))
+        let duration = try await encoder.finish()
+        XCTAssertEqual(duration, 2.0, accuracy: 0.15)
+    }
+
     func testEncodesPCMToMP3() async throws {
         guard FFmpegLocator.resolve(settings: settings) != nil else {
             throw XCTSkip("ffmpeg not found on this machine")

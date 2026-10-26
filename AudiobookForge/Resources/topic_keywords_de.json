@@ -46,7 +46,7 @@
     { "keyword": "dichte", "weight": 1 },
     { "keyword": "spektrum", "weight": 1 },
     { "keyword": "absorption", "weight": 2 },
-    { "keyword": "proton", "weight": 2 },
+    { "keyword": "nukleon", "weight": 2 },
     { "keyword": "vektor", "weight": 2 },
     { "keyword": "funktion", "weight": 1 },
     { "keyword": "parameter", "weight": 1 }

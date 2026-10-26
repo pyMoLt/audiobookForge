@@ -5,13 +5,18 @@ import Foundation
 @MainActor
 final class TimeMachineSummarizationE2ETests: XCTestCase {
     func testEndToEndSummarizationAndTimeMachineAudiobook() async throws {
-        let epubURL = URL(fileURLWithPath: "The_Time_Machine.epub")
-        guard FileManager.default.fileExists(atPath: epubURL.path) else {
-            XCTFail("Test book not found at \(epubURL.path)")
-            return
+        try LiveTestGate.require("Time-Machine-E2E (oMLX)")
+        // v4.1: own library, settings and output — the test once wrote into
+        // the real library while the app was running and the book fell out
+        // of the app's index.
+        let scratch = try LiveTestGate.scratchDirectory("timemachine")
+        guard let fixturesDir = ProcessInfo.processInfo.environment["AUDIOBOOKFORGE_SMOKE_FIXTURES_DIR"], !fixturesDir.isEmpty else {
+            throw XCTSkip("Set AUDIOBOOKFORGE_SMOKE_FIXTURES_DIR to run Time Machine E2E test")
         }
+        let epubURL = URL(fileURLWithPath: fixturesDir, isDirectory: true).appendingPathComponent("The_Time_Machine.epub")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: epubURL.path), "Test book not found at \(epubURL.path)")
 
-        let settingsStore = SettingsStore()
+        let settingsStore = SettingsStore(fileURL: scratch.appendingPathComponent("settings.json"))
         settingsStore.settings.llmProvider = .omlx
         settingsStore.settings.omlxBaseURL = "http://127.0.0.1:8000/v1"
         settingsStore.settings.omlxAPIKey = "admin"
@@ -22,8 +27,9 @@ final class TimeMachineSummarizationE2ETests: XCTestCase {
         settingsStore.settings.defaultVoiceEN = VoiceID(engine: .kokoro, voice: "af_heart")
         settingsStore.settings.defaultOutputFormat = .mp3Chapters
         settingsStore.settings.ttsParallelWorkers = 1
+        settingsStore.settings.outputBaseFolderPath = scratch.appendingPathComponent("out", isDirectory: true).path
 
-        let libraryStore = LibraryStore()
+        let libraryStore = LibraryStore(root: scratch.appendingPathComponent("library", isDirectory: true))
 
         // Clean up any previous test run with this title
         for existing in libraryStore.books where existing.title == "The Time Machine (KI-Zusammenfassung)" {
@@ -51,7 +57,8 @@ final class TimeMachineSummarizationE2ETests: XCTestCase {
 
         let controller = PipelineController(
             libraryStore: libraryStore,
-            settingsStore: settingsStore
+            settingsStore: settingsStore,
+            chapterAudioRoot: scratch.appendingPathComponent("chapter_audio", isDirectory: true)
         )
 
         print(">>> Starting pipeline (Mode: Summary, Engine: Kokoro af_heart)...")

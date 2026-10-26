@@ -67,7 +67,7 @@ struct SetupAssistantView: View {
             .clipped()
             footer
         }
-        .frame(width: 760, height: 620)
+        .resizableSheet(preferred: CGSize(width: 760, height: 620), floor: CGSize(width: 600, height: 520))
         .background { PaperPage() }
         .task { await checkRequirements() }
         #if DEBUG
@@ -86,7 +86,7 @@ struct SetupAssistantView: View {
             AppIconTile(systemImage: "books.vertical.fill", size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text("AudiobookForge einrichten")
-                    .font(.system(size: 20, weight: .semibold, design: .serif))
+                    .appFont(size: 20, weight: .semibold, design: .serif)
                 Text("Kapitel \(step.rawValue + 1) von \(Step.allCases.count) · \(step.title)")
                     .flowFont(.caption, weight: .semibold)
                     .foregroundStyle(.tint)
@@ -183,17 +183,15 @@ struct SetupAssistantView: View {
         @Bindable var store = settingsStore
         return VStack(alignment: .leading, spacing: 20) {
             Text("Aus jedem PDF und EPUB wird ein Hörbuch — komplett lokal auf deinem Mac.")
-                .font(.system(size: 24, weight: .semibold, design: .serif))
+                .appFont(size: 24, weight: .semibold, design: .serif)
                 .fixedSize(horizontal: false, vertical: true)
             Text("In wenigen Schritten richten wir eine Sprach-Engine und deine ersten Stimmen ein. Alles Weitere kannst du später in den Einstellungen nachladen.")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)
             PillRow(title: "App-Sprache", subtitle: "Wird nach einem Neustart vollständig übernommen.") {
-                SegmentedPills(selection: $store.settings.appLanguage, options: [
-                    PillOption(value: AppLanguage.system, label: "System", systemImage: "globe"),
-                    PillOption(value: AppLanguage.de, label: "Deutsch", verbatim: true),
-                    PillOption(value: AppLanguage.en, label: "English", verbatim: true),
-                ])
+                PillPicker(selection: $store.settings.appLanguage, options:
+                    [PillOption(value: AppLanguage.system, label: "System", systemImage: "globe")]
+                    + AppLanguage.concrete.map { PillOption(value: $0, label: $0.displayName, verbatim: true) })
             }
             .onChange(of: settingsStore.settings.appLanguage) { _, language in language.apply() }
             PillRow(title: "Akzentfarbe") {
@@ -214,7 +212,7 @@ struct SetupAssistantView: View {
     private var requirementsPage: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Zwei Werkzeuge braucht die App auf deinem Mac.")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
             Text("AudiobookForge kann diese automatisch als eigenständige Laufzeit herunterladen — ohne Homebrew oder Terminal.")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)
@@ -288,7 +286,7 @@ struct SetupAssistantView: View {
                 case .none: ProgressView().controlSize(.small)
                 }
             }
-            .font(.system(size: 20))
+            .appFont(size: 20)
             .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L(title)).flowFont(.body, weight: .semibold)
@@ -301,7 +299,7 @@ struct SetupAssistantView: View {
                     NSPasteboard.general.setString(command, forType: .string)
                 } label: {
                     Label(command, systemImage: "doc.on.doc")
-                        .font(.system(size: 12, design: .monospaced))
+                        .appFont(size: 12, design: .monospaced)
                 }
                 .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
                 .help("Befehl kopieren")
@@ -314,7 +312,7 @@ struct SetupAssistantView: View {
     private var enginePage: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Kokoro — schnelle, natürliche Stimmen")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
             Text("Kokoro läuft über MLX direkt auf dem Apple-Chip. Die App legt dafür eine eigene Python-Umgebung an und lädt beim ersten Vorlesen die Modellgewichte (~300 MB).")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)
@@ -353,7 +351,7 @@ struct SetupAssistantView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(Array(installLog.suffix(200).enumerated()), id: \.offset) { index, line in
-                                Text(line).font(.system(size: 11, design: .monospaced)).id(index)
+                                Text(line).appFont(size: 11, design: .monospaced).id(index)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -377,7 +375,7 @@ struct SetupAssistantView: View {
         let german = VoiceCatalog.allProfiles.filter { ($0.id.engine == .kokoroGerman) && $0.languageCode.hasPrefix("de") }
         return VStack(alignment: .leading, spacing: 16) {
             Text("Wer liest deine Bücher vor?")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
             Text("Tippe auf ▶ für eine Hörprobe und wähle je Sprache eine Stimme. Weitere Stimmen findest du später in der Sprecherkartei.")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)
@@ -439,7 +437,7 @@ struct SetupAssistantView: View {
     private var aiPage: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Zusammenfassungen und Bildbeschreibungen (optional)")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Für Zusammenfassungen und das Beschreiben von Abbildungen nutzt die App ein lokales Sprachmodell über oMLX oder LM Studio. Zum reinen Vorlesen ist das nicht nötig.")
                 .flowFont(.body)
@@ -466,10 +464,10 @@ struct SetupAssistantView: View {
         VStack(spacing: 18) {
             Spacer(minLength: 20)
             Image(systemName: "books.vertical.fill")
-                .font(.system(size: 56))
+                .appFont(size: 56)
                 .foregroundStyle(.tint)
             Text("Dein Regal ist bereit.")
-                .font(.system(size: 28, weight: .semibold, design: .serif))
+                .appFont(size: 28, weight: .semibold, design: .serif)
             Text("Zieh ein PDF oder EPUB ins Fenster. Weitere Stimmen und Engines (Phonon, Pocket TTS, Piper, Supertonic, eigene Stimmen) lädst du jederzeit unter Einstellungen → Engines & Downloads.")
                 .flowFont(.body)
                 .foregroundStyle(.secondary)

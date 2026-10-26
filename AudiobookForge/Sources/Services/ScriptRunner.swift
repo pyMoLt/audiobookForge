@@ -48,7 +48,9 @@ enum ScriptRunner {
                     if Task.isCancelled {
                         continuation.resume(throwing: CancellationError())
                     } else {
-                        continuation.resume(returning: proc.terminationStatus)
+                        // A crash (signal) comes back negative, so it cannot be
+                        // mistaken for the program's own exit code (v4.2.2).
+                        continuation.resume(returning: proc.terminationReason == .uncaughtSignal ? -proc.terminationStatus : proc.terminationStatus)
                     }
                 }
                 do {

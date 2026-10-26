@@ -24,8 +24,20 @@ struct FlowSurface: ViewModifier {
     @Environment(\.surfaceLevel) private var level
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.pixelMode) private var pixelMode
 
     func body(content: Content) -> some View {
+        if pixelMode {
+            content
+                .background(Rectangle().fill(colorScheme == .dark ? Color(white: 0.16) : Color.white))
+                .pixelFrame(true, shadow: shadow ? 4 : 0)
+        } else {
+            smooth(content)
+        }
+    }
+
+    @ViewBuilder
+    private func smooth(_ content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let effective: SurfaceLevel = reduceTransparency ? .solid : level
         content
@@ -130,6 +142,7 @@ struct PillSection<Content: View>: View {
                     .padding(.horizontal, 6)
             }
         }
+        .id(title)
     }
 }
 
@@ -224,6 +237,7 @@ struct PillOption<Value: Hashable>: Identifiable {
 /// with the accent and glides between options (template §6.4).
 /// Falls back to short labels / icons only when space runs out.
 struct SegmentedPills<Option: Hashable>: View {
+    @Environment(\.pixelMode) private var pixelMode
     @Binding var selection: Option
     let options: [PillOption<Option>]
     var size: ControlSize = .regular
@@ -256,8 +270,8 @@ struct SegmentedPills<Option: Hashable>: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(0.055)))
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.6))
+        .background(flowShape(pixelMode).fill(Color.primary.opacity(0.055)))
+        .overlay(flowShape(pixelMode).stroke(Color.primary.opacity(0.06), lineWidth: 0.6))
         .fixedSize()
     }
 
@@ -281,13 +295,13 @@ struct SegmentedPills<Option: Hashable>: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(accent.onAccent) : AnyShapeStyle(.primary))
             .background {
                 if isSelected {
-                    Capsule()
+                    flowShape(pixelMode)
                         .fill(accent.fill)
                         .shadow(color: accent.color.opacity(0.35), radius: 6, y: 2)
                         .matchedGeometryEffect(id: "selection", in: namespace)
                 }
             }
-            .contentShape(Capsule())
+            .contentShape(flowShape(pixelMode))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
@@ -299,6 +313,7 @@ struct SegmentedPills<Option: Hashable>: View {
 
 /// Popup picker rendered as a pill (replaces grey `.menu` pickers).
 struct PillPicker<Value: Hashable>: View {
+    @Environment(\.pixelMode) private var pixelMode
     @Binding var selection: Value
     let options: [PillOption<Value>]
     var minWidth: CGFloat? = nil
@@ -326,16 +341,16 @@ struct PillPicker<Value: Hashable>: View {
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
+                    .appFont(size: 9, weight: .bold)
                     .foregroundStyle(.secondary)
             }
             .flowFont(.body)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .frame(minWidth: minWidth, alignment: .leading)
-            .background(Capsule().fill(Color.primary.opacity(0.055)))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.6))
-            .contentShape(Capsule())
+            .background(flowShape(pixelMode).fill(Color.primary.opacity(0.055)))
+            .overlay(flowShape(pixelMode).stroke(Color.primary.opacity(0.07), lineWidth: 0.6))
+            .contentShape(flowShape(pixelMode))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -392,6 +407,7 @@ struct PillSlider: View {
 
 /// − value + stepper as a pill (replaces the tiny native stepper arrows).
 struct PillStepper: View {
+    @Environment(\.pixelMode) private var pixelMode
     @Binding var value: Int
     var range: ClosedRange<Int>
     var step: Int = 1
@@ -408,7 +424,7 @@ struct PillStepper: View {
             stepButton("plus", enabled: value + step <= range.upperBound) { value = min(range.upperBound, value + step) }
         }
         .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(0.055)))
+        .background(flowShape(pixelMode).fill(Color.primary.opacity(0.055)))
         .animation(Theme.Motion.quick, value: value)
         .accessibilityElement(children: .ignore)
         .accessibilityValue("\(value)")
@@ -424,7 +440,7 @@ struct PillStepper: View {
     private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .bold))
+                .appFont(size: 11, weight: .bold)
                 .frame(width: 26, height: 26)
                 .contentShape(Circle())
         }
@@ -520,7 +536,7 @@ struct AccentSwatchPicker: View {
                             .strokeBorder(candidate.color, lineWidth: 2.5)
                             .frame(width: 50, height: 50)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
+                            .appFont(size: 14, weight: .bold)
                             .foregroundStyle(candidate.onAccent)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -560,6 +576,7 @@ struct FlowButtonStyle: ButtonStyle {
 }
 
 private struct FlowButtonBody: View {
+    @Environment(\.pixelMode) private var pixelMode
     let configuration: ButtonStyleConfiguration
     let variant: FlowButtonStyle.Variant
     let size: ControlSize
@@ -573,21 +590,22 @@ private struct FlowButtonBody: View {
             .padding(.horizontal, size == .small ? 11 : (size == .large ? 22 : 16))
             .padding(.vertical, size == .small ? 5 : (size == .large ? 11 : 8))
             .foregroundStyle(foreground)
-            .background(background, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(variant == .prominent ? 0.25 : 0), lineWidth: 0.7))
+            .background(background, in: flowShape(pixelMode))
+            .overlay(flowShape(pixelMode).stroke(Color.white.opacity(variant == .prominent ? 0.25 : 0), lineWidth: 0.7))
             .shadow(color: variant == .prominent ? accent.color.opacity(hovering ? 0.45 : 0.28) : .clear, radius: hovering ? 10 : 6, y: 3)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(isEnabled ? 1 : 0.45)
             .animation(Theme.Motion.quick, value: configuration.isPressed)
             .animation(Theme.Motion.quick, value: hovering)
             .onHover { hovering = $0 }
-            .contentShape(Capsule())
+            .contentShape(flowShape(pixelMode))
+            .pixelFrame(pixelMode && variant != .subtle, shadow: configuration.isPressed ? 0 : 2)
     }
 
     private var foreground: AnyShapeStyle {
         switch variant {
         case .prominent: return AnyShapeStyle(accent.onAccent)
-        case .secondary: return AnyShapeStyle(accent.color)
+        case .secondary: return AnyShapeStyle(accent.textColor)
         case .subtle: return AnyShapeStyle(.primary)
         case .destructive: return AnyShapeStyle(Color.red)
         }
@@ -621,7 +639,7 @@ struct GlassIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: size * 0.42, weight: .semibold))
+                .appFont(size: size * 0.42, weight: .semibold)
                 .foregroundStyle(isActive ? AnyShapeStyle(accent.onAccent) : AnyShapeStyle(.primary))
                 .frame(width: size, height: size)
                 .contentShape(Circle())
@@ -647,6 +665,7 @@ struct HoverRevealModifier: ViewModifier {
 
 /// Small status chip (processing states, counts, hints).
 struct StatusBadge: View {
+    @Environment(\.pixelMode) private var pixelMode
     let text: String
     var systemImage: String? = nil
     var tint: Color? = nil
@@ -664,13 +683,14 @@ struct StatusBadge: View {
         .flowFont(.caption, weight: .semibold)
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .background(color.opacity(0.14), in: Capsule())
-        .foregroundStyle(color)
+        .background(color.opacity(0.14), in: flowShape(pixelMode))
+        .foregroundStyle(tint ?? accent.textColor)
     }
 }
 
 /// Rounded progress bar with the accent gradient.
 struct FlowProgressBar: View {
+    @Environment(\.pixelMode) private var pixelMode
     var fraction: Double
     var height: CGFloat = 8
     @Environment(\.flowAccent) private var accent
@@ -680,8 +700,8 @@ struct FlowProgressBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.08))
-                Capsule()
+                flowShape(pixelMode).fill(Color.primary.opacity(0.08))
+                flowShape(pixelMode)
                     .fill(LinearGradient(colors: [accent.color, accent.gradientPartner], startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(height, proxy.size.width * clamped))
                     .opacity(clamped > 0 ? 1 : 0)
@@ -801,7 +821,7 @@ struct AppIconTile: View {
             .frame(width: size, height: size)
             .overlay {
                 Image(systemName: systemImage)
-                    .font(.system(size: size * 0.44, weight: .semibold))
+                    .appFont(size: size * 0.44, weight: .semibold)
                     .foregroundStyle(accent.onAccent)
             }
             .overlay {

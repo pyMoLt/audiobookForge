@@ -1,5 +1,6 @@
 import XCTest
 @testable import AudiobookForge
+import PhononTTS
 
 /// v4: Phonon engine, per-engine parallelism, Hugging Face access mapping,
 /// shared bridge speech plan. No network, no model, no bridge process.
@@ -165,5 +166,68 @@ final class VoiceSampleBudgetTests: XCTestCase {
         }
         XCTAssertNotNil(VoiceSampleLibrary.url(for: profile.id, text: profile.sampleText))
         XCTAssertNil(VoiceSampleLibrary.url(for: profile.id, text: "Ein anderer Text."))
+    }
+}
+
+/// v4: app languages beyond German/English.
+final class AppLanguageTests: XCTestCase {
+    func testSystemLanguageResolvesToASupportedLanguage() {
+        XCTAssertEqual(AppLanguage.resolvedSystemLanguage(["fr-FR", "en-US"]), "fr")
+        XCTAssertEqual(AppLanguage.resolvedSystemLanguage(["it-IT"]), "it")
+        XCTAssertEqual(AppLanguage.resolvedSystemLanguage(["ja-JP", "es-ES"]), "es")
+        XCTAssertEqual(AppLanguage.resolvedSystemLanguage(["ja-JP"]), "en")
+    }
+
+    func testOverrideWritesAppleLanguages() {
+        let suite = "abf-lang-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        // Only the suite's own value counts (reads fall back to the
+        // global domain, i.e. the Mac's languages).
+        AppLanguage.it.apply(defaults: defaults)
+        XCTAssertEqual(defaults.persistentDomain(forName: suite)?["AppleLanguages"] as? [String], ["it"])
+        AppLanguage.system.apply(defaults: defaults)
+        XCTAssertNil(defaults.persistentDomain(forName: suite)?["AppleLanguages"])
+    }
+
+    func testEveryCatalogEntryHasAllFiveLanguages() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Localizable", withExtension: "xcstrings")
+            ?? Bundle.main.url(forResource: "Localizable", withExtension: "strings", subdirectory: nil, localization: "fr"))
+        XCTAssertNotNil(url)
+        for language in ["en", "fr", "es", "it"] {
+            XCTAssertNotNil(Bundle.main.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: language), language)
+        }
+        let bundle = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj").flatMap(Bundle.init(path:)))
+        XCTAssertEqual(bundle.localizedString(forKey: "Leistung", value: nil, table: nil), "Performances")
+    }
+}
+
+/// v4.1: Phonon on the Neural Engine only in the power-saving profile.
+final class PhononNeuralSwitchTests: XCTestCase {
+    func testNeuralEngineOnlyWhenSavingAtNormalTempoAndPrepared() {
+        XCTAssertTrue(PhononEngine.usesNeuralEngine(profile: .saver, speed: 1.0, neuralReady: true))
+        XCTAssertFalse(PhononEngine.usesNeuralEngine(profile: .maximum, speed: 1.0, neuralReady: true), "Netzteil: CPU ist schneller")
+        XCTAssertFalse(PhononEngine.usesNeuralEngine(profile: .balanced, speed: 1.0, neuralReady: true))
+        XCTAssertFalse(PhononEngine.usesNeuralEngine(profile: .saver, speed: 1.2, neuralReady: true), "Tempo ist im Core-ML-Export fest")
+        XCTAssertFalse(PhononEngine.usesNeuralEngine(profile: .saver, speed: 1.0, neuralReady: false))
+    }
+
+    func testNeuralBundleLivesBesideTheLanguageModel() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("abf-neural-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let env = PhononEnvironmentManager(root: root)
+        XCTAssertFalse(env.isNeuralReady("de"))
+        let dir = env.neuralDirectory(for: "de")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: dir.appendingPathComponent("bundle.json"))
+        XCTAssertTrue(env.isNeuralReady("de"))
+        try env.removeModel("de")
+        XCTAssertFalse(env.isNeuralReady("de"), "Modell entfernen entfernt auch das Core-ML-Bündel")
+    }
+
+    func testPhononLanguageMapping() {
+        XCTAssertEqual(PhononNeuralEngine.phononLanguage("de"), .german)
+        XCTAssertEqual(PhononNeuralEngine.phononLanguage("fr"), .french)
+        XCTAssertEqual(PhononNeuralEngine.phononLanguage("xx"), .english)
     }
 }

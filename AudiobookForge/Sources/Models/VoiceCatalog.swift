@@ -172,7 +172,14 @@ enum VoiceCatalog {
     private static let piperGerman: [VoiceProfile] = [
         VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten-medium"), displayName: "Thorsten (mittel)", languageCode: "de", gender: .male, tags: ["Erzähler"], quality: .good, sampleText: germanSampleText, featured: true),
         VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten-high"), displayName: "Thorsten (hoch)", languageCode: "de", gender: .male, tags: ["Erzähler", "höchste Qualität"], quality: .good, sampleText: germanSampleText, featured: true),
-        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium"), displayName: "Thorsten Emotional", languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: true),
+        // Thorsten Emotional (v4.2): one 77 MB model, recorded in eight
+        // styles; the five that suit a whole book are separate voices. The
+        // bare id is speaker 0 ("amused"), as before.
+        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium#neutral"), displayName: L("Thorsten · neutral"), languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: true),
+        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium#whisper"), displayName: L("Thorsten · flüsternd"), languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: true),
+        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium"), displayName: L("Thorsten · amüsiert"), languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: false),
+        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium#surprised"), displayName: L("Thorsten · überrascht"), languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: false),
+        VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-thorsten_emotional-medium#sleepy"), displayName: L("Thorsten · schläfrig"), languageCode: "de", gender: .male, tags: ["emotional"], quality: .ok, sampleText: germanSampleText, featured: false),
         VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-eva_k-x_low"), displayName: "Eva K.", languageCode: "de", gender: .female, tags: ["freundlich"], quality: .ok, sampleText: germanSampleText, featured: true),
         VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-karlsson-low"), displayName: "Karlsson", languageCode: "de", gender: .male, tags: ["sachlich"], quality: .ok, sampleText: germanSampleText, featured: true),
         VoiceProfile(id: VoiceID(engine: .piper, voice: "de_DE-kerstin-low"), displayName: "Kerstin", languageCode: "de", gender: .female, tags: ["ruhig"], quality: .ok, sampleText: germanSampleText, featured: true),

@@ -13,7 +13,7 @@ import os
 import re
 import sys
 
-ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "AudiobookForge", "AudiobookForge", "Sources")
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "AudiobookForge", "Sources")
 SCAN = ["UI", "App", "Models", "Services/TopicClassifier.swift", "Services/LanguageDetector.swift", "Pipeline/TTS/TTSEngine.swift"]
 
 LITERAL = re.compile(r'(?<![\\#])"((?:[^"\\\n]|\\.)*)"')

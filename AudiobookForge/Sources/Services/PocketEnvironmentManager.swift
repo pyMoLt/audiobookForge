@@ -119,13 +119,18 @@ final class PocketEnvironmentManager: @unchecked Sendable {
         }
     }
 
-    /// Removes one language variant's weights and voices from the cache.
+    /// Removes one language variant's weights and voices from the cache —
+    /// including the data behind the snapshot links (v4.2; before, only the
+    /// links went and the space stayed taken).
     func removeModel(_ language: String, highQuality: Bool) throws {
+        let dirs = modelDirectories(language, highQuality: highQuality)
+        if !dirs.isEmpty { try HFCacheJanitor.remove(dirs, hubRoot: hubCache) }
+    }
+
+    func modelDirectories(_ language: String, highQuality: Bool) -> [URL] {
         let variant = Self.variant(language: language, highQuality: highQuality)
-        for snapshot in snapshots() {
-            let dir = snapshot.appendingPathComponent("languages/\(variant)", isDirectory: true)
-            if FileManager.default.fileExists(atPath: dir.path) { try FileManager.default.removeItem(at: dir) }
-        }
+        return snapshots().map { $0.appendingPathComponent("languages/\(variant)", isDirectory: true) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     /// Cached state of a cloned voice for one model variant.

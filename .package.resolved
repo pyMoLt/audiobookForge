@@ -1,0 +1,15 @@
+{
+  "originHash" : "f5bae13be49abeeab12e66c12e5adbdf75b0732123c5c1c19a38ac26636978e0",
+  "pins" : [
+    {
+      "identity" : "xn-ptts",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gradium-ai/xn-ptts",
+      "state" : {
+        "revision" : "cc0c32bcad4e79121e98cb16d9a1b19f87772e82",
+        "version" : "0.4.2"
+      }
+    }
+  ],
+  "version" : 3
+}

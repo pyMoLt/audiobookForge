@@ -41,10 +41,14 @@ def main() -> int:
     repo, model_name, voice_name = SOURCES[args.voice]
     revision = HfApi().model_info(repo).sha
     print(f"DOWNLOAD {repo}@{revision}", flush=True)
-    model_path = hf_hub_download(repo_id=repo, filename=model_name, revision=revision)
-    voice_path = hf_hub_download(repo_id=repo, filename=voice_name, revision=revision)
+    # The original checkpoint is only needed for the conversion: download it
+    # into a throwaway cache instead of the shared Hugging Face cache, so it
+    # does not stay behind next to the converted model (~310 MB each).
+    download_cache = target.parent / f".kokoro-{args.voice}-download-{uuid.uuid4().hex}"
+    model_path = hf_hub_download(repo_id=repo, filename=model_name, revision=revision, cache_dir=download_cache)
+    voice_path = hf_hub_download(repo_id=repo, filename=voice_name, revision=revision, cache_dir=download_cache)
     config_repo = repo if args.voice == "thorsten" else "hexgrad/Kokoro-82M"
-    config_path = hf_hub_download(repo_id=config_repo, filename="config.json")
+    config_path = hf_hub_download(repo_id=config_repo, filename="config.json", cache_dir=download_cache)
 
     print("CONVERT checkpoint", flush=True)
     checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
@@ -72,6 +76,8 @@ def main() -> int:
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+    finally:
+        shutil.rmtree(download_cache, ignore_errors=True)
     print(f"DONE {target}", flush=True)
     return 0
 

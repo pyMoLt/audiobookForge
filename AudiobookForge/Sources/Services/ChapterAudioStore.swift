@@ -191,7 +191,7 @@ enum ChapterAudioStore {
         var arguments = ["-y", "-hide_banner", "-loglevel", "error", "-i", source.path]
         switch destination.pathExtension.lowercased() {
         case "m4a":
-            arguments += ["-c:a", "aac", "-b:a", "\(max(16, settings.chapterAudioBitrateKbps))k", "-f", "ipod", destination.path]
+            arguments += ["-c:a", "aac", "-b:a", "\(max(16, settings.aacBitrateKbps))k", "-f", "ipod", destination.path]
         case "mp3":
             arguments += ["-c:a", "libmp3lame", "-qscale:a", String(settings.mp3Quality), destination.path]
         default:

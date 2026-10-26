@@ -397,6 +397,18 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// Pocket TTS (v4): "<lang>/<name>"; 24-layer models (slower, better).
     var pocketVoice: String = "de/juergen"
     var pocketHighQuality: Bool = false
+    /// Expression (v4.2): sampling temperature of Phonon and Pocket TTS —
+    /// lower = calmer and steadier, higher = livelier, less predictable.
+    /// Both runtimes default to 0.3.
+    var phononTemperature: Double = ExpressionDefaults.temperature
+    var pocketTemperature: Double = ExpressionDefaults.temperature
+    /// English Phonon from the 31m model (v4.2): Apache 2.0, no sign-in,
+    /// ~5 % faster; off = the 40m model (CC BY-NC).
+    var phononEnglish31m: Bool = false
+    /// Phonon refinement steps (v4.4): 1 = the model's default, 2 or 4
+    /// sound a little finer and cost ~15–30 % speed. Above 1 the Neural
+    /// Engine export (fixed at 1) is not used.
+    var phononRefinementSteps: Int = 1
     /// Default voices for languages beyond German/English (v4: fr, es, it).
     var defaultVoicesByLanguage: [String: VoiceID] = [:]
 
@@ -503,6 +515,16 @@ struct AppSettings: Codable, Sendable, Equatable {
     var glassIntensity: Double = 80
     var motionMode: MotionMode = .system
     var flowBackgroundEnabled: Bool = true
+    /// Fun & easter eggs (v4.3): each can be switched off; pixel mode is
+    /// off by default and only turned on through its confirmation cascade.
+    var soundEffectsEnabled: Bool = true
+    var owlPostEnabled: Bool = true
+    var loadingQuipsEnabled: Bool = true
+    var lesserDogEnabled: Bool = true
+    var pixelMode: Bool = false
+    /// Achievement id → when it was unlocked.
+    var unlockedAchievements: [String: Date] = [:]
+    var dogPets: Int = 0
     /// UI language (v3.1): system, German or English.
     var appLanguage: AppLanguage = .system
     /// Energy profile on the power adapter / on battery (v3.2).
@@ -565,6 +587,33 @@ struct AppSettings: Codable, Sendable, Equatable {
         set { if llmProvider == .omlx { omlxGeneration = newValue } else { lmStudioGeneration = newValue } }
     }
     var activeParallelRequests: Int { max(1, llmProvider == .omlx ? omlxParallelRequests : lmStudioParallelRequests) }
+
+    /// The engine's expression value (v4.2), nil where there is none.
+    func expression(for engine: TTSEngineID) -> Double? {
+        switch engine {
+        case .phonon: return phononTemperature
+        case .pocketTTS: return pocketTemperature
+        case .piper: return piperNoiseScale
+        default: return nil
+        }
+    }
+
+    /// Voice for books in languages without their own default (and for all
+    /// books when "choose by language" is off): the fallback engine and its voice.
+    var fallbackVoice: VoiceID { VoiceID(engine: ttsEngine, voice: defaultVoice(for: ttsEngine)) }
+
+    mutating func setFallbackVoice(_ voice: VoiceID) {
+        ttsEngine = voice.engine
+        switch voice.engine {
+        case .kokoro: kokoroVoice = voice.voice
+        case .piper: piperVoice = voice.voice
+        case .kokoroGerman: kokoroGermanVoice = voice.voice
+        case .supertonic3: supertonicVoice = voice.voice
+        case .phonon: phononVoice = voice.voice
+        case .pocketTTS: pocketVoice = voice.voice
+        case .kokoroThorsten, .omniVoice, .appleSystem: break
+        }
+    }
 
     func defaultVoice(for engine: TTSEngineID) -> String {
         switch engine {
@@ -658,13 +707,21 @@ struct AppSettings: Codable, Sendable, Equatable {
     }
 
     var defaultOutputFormat: OutputFormat = .mp3Chapters
-    var mp3Quality: Int = 2
+    /// v4.4: 0 (best VBR) — about the size of 2 at Phonon's 24 kHz.
+    var mp3Quality: Int = 0
+    /// AAC bitrate of M4B/M4A books. v4.4: also the chapter files' rate —
+    /// packaging only remuxes them, so this is what ends up in the book
+    /// (before, a separate 64 kbit/s chapter rate silently won).
     var aacBitrateKbps: Int = 128
-    /// Bitrate of the small per-chapter files kept for the in-app player
-    /// and single-chapter regeneration. Mono speech at 64 kbps AAC is
-    /// ~29 MB per audio hour instead of ~170 MB as WAV.
-    var chapterAudioBitrateKbps: Int = 64
     var loudnessNormalizationEnabled: Bool = true
+    /// v4.4: calm (one fixed gain per chapter + peak limiter, keeps the
+    /// engine's sample rate) or dynamic (EBU R128 loudnorm, rides the gain).
+    var loudnessMode: LoudnessMode = .calm
+    /// v4.4: light clean-up before normalizing — declick, mild denoise,
+    /// +2 dB presence above 5 kHz.
+    var audioEnhancementEnabled: Bool = true
+    /// Marks settings already moved to the v4.4 audio defaults.
+    var audioDefaultsRevision: Int = 1
     var loudnessTargetLUFS: Double = -18
     var loudnessTruePeakDB: Double = -1.5
     var loudnessRangeLU: Double = 11
@@ -848,10 +905,12 @@ struct AppSettings: Codable, Sendable, Equatable {
         case piperNoiseScale, piperNoiseW
         case preferredCloneEngine, omniVoiceSteps
         case appearanceMode, textSizeStep, accent, glassIntensity, motionMode, flowBackgroundEnabled, appLanguage, powerModeOnAdapter, powerModeOnBattery
+        case soundEffectsEnabled, owlPostEnabled, loadingQuipsEnabled, lesserDogEnabled, pixelMode, unlockedAchievements, dogPets
         case sidebarGrouping
         case kokoroGermanVoice, kokoroGermanSpeed, kokoroThorstenSpeed
         case supertonicVoice, supertonicSpeed, supertonicSteps, supertonicChunkCharacters, supertonicPauseSeconds, ttsParallelWorkers
         case ttsWorkersByEngine, phononVoice, phononSpeed, pocketVoice, pocketHighQuality, defaultVoicesByLanguage
+        case phononTemperature, pocketTemperature, phononEnglish31m, phononRefinementSteps
         case ramWatchdogEnabled, ramWatchdogAuto, ramWatchdogManualLimitGB
         case llmBaseURL, llmAPIKey, llmModel, llmProvider
         case omlxBaseURL, omlxAPIKey, omlxModel
@@ -860,7 +919,7 @@ struct AppSettings: Codable, Sendable, Equatable {
         case llmVisionTimeoutSeconds, llmVisionThinkingMode, llmVisionModelOverride, correctImplausibleServerPresets
         case defaultOutputFormat, outputBaseFolderPath, outputFolderTemplate
         case keepChapterAudioAfterPackaging, boxLabelHandling, speakHeadingNumbers
-        case mp3Quality, aacBitrateKbps, chapterAudioBitrateKbps, loudnessNormalizationEnabled
+        case mp3Quality, aacBitrateKbps, loudnessNormalizationEnabled, loudnessMode, audioEnhancementEnabled, audioDefaultsRevision
         case loudnessTargetLUFS, loudnessTruePeakDB, loudnessRangeLU
         case voicePreviewSentenceCount, voicePreviewMaxCharacters
         case promptTemplates, dependencyPathOverrides
@@ -914,6 +973,10 @@ struct AppSettings: Codable, Sendable, Equatable {
         phononSpeed = try container.decodeIfPresent(Double.self, forKey: .phononSpeed) ?? d.phononSpeed
         pocketVoice = try container.decodeIfPresent(String.self, forKey: .pocketVoice) ?? d.pocketVoice
         pocketHighQuality = try container.decodeIfPresent(Bool.self, forKey: .pocketHighQuality) ?? d.pocketHighQuality
+        phononTemperature = try container.decodeIfPresent(Double.self, forKey: .phononTemperature) ?? d.phononTemperature
+        pocketTemperature = try container.decodeIfPresent(Double.self, forKey: .pocketTemperature) ?? d.pocketTemperature
+        phononEnglish31m = try container.decodeIfPresent(Bool.self, forKey: .phononEnglish31m) ?? d.phononEnglish31m
+        phononRefinementSteps = try container.decodeIfPresent(Int.self, forKey: .phononRefinementSteps) ?? d.phononRefinementSteps
         defaultVoicesByLanguage = try container.decodeIfPresent([String: VoiceID].self, forKey: .defaultVoicesByLanguage) ?? d.defaultVoicesByLanguage
         ttsParallelWorkers = try container.decodeIfPresent(Int.self, forKey: .ttsParallelWorkers) ?? d.ttsParallelWorkers
         ramWatchdogEnabled = try container.decodeIfPresent(Bool.self, forKey: .ramWatchdogEnabled) ?? d.ramWatchdogEnabled
@@ -952,6 +1015,13 @@ struct AppSettings: Codable, Sendable, Equatable {
         glassIntensity = try container.decodeIfPresent(Double.self, forKey: .glassIntensity) ?? d.glassIntensity
         motionMode = try container.decodeIfPresent(MotionMode.self, forKey: .motionMode) ?? d.motionMode
         flowBackgroundEnabled = try container.decodeIfPresent(Bool.self, forKey: .flowBackgroundEnabled) ?? d.flowBackgroundEnabled
+        soundEffectsEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEffectsEnabled) ?? d.soundEffectsEnabled
+        owlPostEnabled = try container.decodeIfPresent(Bool.self, forKey: .owlPostEnabled) ?? d.owlPostEnabled
+        loadingQuipsEnabled = try container.decodeIfPresent(Bool.self, forKey: .loadingQuipsEnabled) ?? d.loadingQuipsEnabled
+        lesserDogEnabled = try container.decodeIfPresent(Bool.self, forKey: .lesserDogEnabled) ?? d.lesserDogEnabled
+        pixelMode = try container.decodeIfPresent(Bool.self, forKey: .pixelMode) ?? d.pixelMode
+        unlockedAchievements = try container.decodeIfPresent([String: Date].self, forKey: .unlockedAchievements) ?? d.unlockedAchievements
+        dogPets = try container.decodeIfPresent(Int.self, forKey: .dogPets) ?? d.dogPets
         appLanguage = try container.decodeIfPresent(AppLanguage.self, forKey: .appLanguage) ?? d.appLanguage
         powerModeOnAdapter = try container.decodeIfPresent(PowerMode.self, forKey: .powerModeOnAdapter) ?? d.powerModeOnAdapter
         powerModeOnBattery = try container.decodeIfPresent(PowerMode.self, forKey: .powerModeOnBattery) ?? d.powerModeOnBattery
@@ -980,9 +1050,15 @@ struct AppSettings: Codable, Sendable, Equatable {
 
         defaultOutputFormat = try container.decodeIfPresent(OutputFormat.self, forKey: .defaultOutputFormat) ?? d.defaultOutputFormat
         mp3Quality = try container.decodeIfPresent(Int.self, forKey: .mp3Quality) ?? d.mp3Quality
+        // v4.4: settings from before carry the old default 2 — move them
+        // to the new default once; a deliberate other value stays.
+        if try container.decodeIfPresent(Int.self, forKey: .audioDefaultsRevision) == nil, mp3Quality == 2 {
+            mp3Quality = d.mp3Quality
+        }
         aacBitrateKbps = try container.decodeIfPresent(Int.self, forKey: .aacBitrateKbps) ?? d.aacBitrateKbps
-        chapterAudioBitrateKbps = try container.decodeIfPresent(Int.self, forKey: .chapterAudioBitrateKbps) ?? d.chapterAudioBitrateKbps
         loudnessNormalizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .loudnessNormalizationEnabled) ?? d.loudnessNormalizationEnabled
+        loudnessMode = try container.decodeIfPresent(LoudnessMode.self, forKey: .loudnessMode) ?? d.loudnessMode
+        audioEnhancementEnabled = try container.decodeIfPresent(Bool.self, forKey: .audioEnhancementEnabled) ?? d.audioEnhancementEnabled
         loudnessTargetLUFS = try container.decodeIfPresent(Double.self, forKey: .loudnessTargetLUFS) ?? d.loudnessTargetLUFS
         loudnessTruePeakDB = try container.decodeIfPresent(Double.self, forKey: .loudnessTruePeakDB) ?? d.loudnessTruePeakDB
         loudnessRangeLU = try container.decodeIfPresent(Double.self, forKey: .loudnessRangeLU) ?? d.loudnessRangeLU

@@ -8,6 +8,8 @@ struct ReviewView: View {
     let bookID: UUID
 
     @State private var showSplitEditor = false
+    /// Expanded outline groups; nil = default (long outlines start collapsed).
+    @State private var expandedGroups: Set<String>?
     @State private var showVoiceGallery = false
     @State private var splitEditorTargetChapterID: UUID? = nil
     @State private var preparationReport: PreparationReport?
@@ -18,6 +20,7 @@ struct ReviewView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 manuscriptHeader
@@ -29,7 +32,7 @@ struct ReviewView: View {
                 if detectedImagesCount > 0 { imagesSection }
                 outputSection
                 preparationSection
-                chapterSection
+                chapterSection.id("chapters")
             }
             .padding(.horizontal, 36)
             .padding(.vertical, 26)
@@ -38,6 +41,14 @@ struct ReviewView: View {
         }
         .scrollEdgeEffectHidden(true, for: .top)
         .scrollIndicators(.never)
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+            let info = note.userInfo as? [String: String] ?? [:]
+            if info["reviewExpand"] == "first" { expandedGroups = Set(ChapterOutlineGroup.make(book.sortedChapters).prefix(1).map(\.id)) }
+            if let target = info["reviewScroll"] { proxy.scrollTo(target, anchor: .top) }
+        }
+        #endif
+        }
         .task(id: book.chapters.count) {
             let chapters = book.chapters
             let settings = settingsStore.settings
@@ -88,7 +99,7 @@ struct ReviewView: View {
                     .tracking(1.1)
                 TextField("Titel", text: bindingForTitle(), axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .appFont(size: 28, weight: .semibold, design: .serif)
                     .lineLimit(1...3)
                 TextField("Autor (optional)", text: bindingForAuthor())
                     .textFieldStyle(.plain)
@@ -231,7 +242,7 @@ struct ReviewView: View {
         let voices = TTSEngineFactory.availableVoices(for: book.engineID)
         return HStack(spacing: 16) {
             Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 18))
+                .appFont(size: 18)
                 .foregroundStyle(.tint)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(.tint.opacity(0.14)))
@@ -587,12 +598,12 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Inhalt")
-                    .font(.system(size: 24, weight: .semibold, design: .serif))
+                    .appFont(size: 24, weight: .semibold, design: .serif)
                 Text("\(book.chapters.count) Kapitel")
                     .flowFont(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("Ziehen zum Umsortieren · Titel direkt bearbeiten")
+                Text("Titel anklicken zum Umbenennen · ziehen zum Umsortieren")
                     .flowFont(.caption)
                     .foregroundStyle(.tertiary)
                 Button {
@@ -603,40 +614,41 @@ struct ReviewView: View {
                 }
                 .buttonStyle(FlowButtonStyle(variant: .secondary, size: .small))
             }
+            // Sorted once per render (v4.2.3): before, every group heading
+            // re-sorted all chapters — per row, with hundreds of chapters.
+            let sorted = book.sortedChapters
+            let groups = ChapterOutlineGroup.make(sorted)
             LazyVStack(spacing: 0) {
-                ForEach(Array(book.sortedChapters.enumerated()), id: \.element.id) { index, chapter in
-                    if let group = chapter.groupTitle,
-                       group != (index > 0 ? book.sortedChapters[index - 1].groupTitle : nil) {
-                        HStack {
-                            Text(group)
-                                .flowFont(.caption, weight: .semibold)
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .tracking(0.8)
-                            Spacer()
+                ForEach(groups) { group in
+                    if let title = group.title {
+                        ChapterGroupHeader(title: title, chapters: sorted[group.range],
+                                           collapsible: groups.count > 1, isExpanded: isExpanded(group, total: sorted.count)) {
+                            toggle(group, total: sorted.count)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 14)
-                        .padding(.bottom, 4)
-                        .accessibilityAddTraits(.isHeader)
                     }
-                    ChapterRow(
-                        chapter: chapter,
-                        index: index,
-                        onRename: { newTitle in renameChapter(id: chapter.id, title: newTitle) },
-                        onMergeWithPrevious: index > 0 ? { mergeWithPrevious(chapterID: chapter.id) } : nil,
-                        onDelete: book.chapters.count > 1 ? { deleteChapter(id: chapter.id) } : nil,
-                        onSplit: {
-                            splitEditorTargetChapterID = chapter.id
-                            showSplitEditor = true
-                        },
-                        onToggleNarration: { included in setNarrationIncluded(chapterID: chapter.id, included: included) }
-                    )
-                    .draggable(chapter.id.uuidString)
-                    .dropDestination(for: String.self) { droppedIDs, _ in
-                        guard let draggedIDString = droppedIDs.first, let draggedID = UUID(uuidString: draggedIDString) else { return false }
-                        moveChapter(draggedID: draggedID, toIndex: index)
-                        return true
+                    if group.title == nil || isExpanded(group, total: sorted.count) {
+                        ForEach(group.range, id: \.self) { index in
+                            let chapter = sorted[index]
+                            ChapterRow(
+                                chapter: chapter,
+                                index: index,
+                                onRename: { newTitle in renameChapter(id: chapter.id, title: newTitle) },
+                                onMergeWithPrevious: index > 0 ? { mergeWithPrevious(chapterID: chapter.id) } : nil,
+                                onDelete: sorted.count > 1 ? { deleteChapter(id: chapter.id) } : nil,
+                                onSplit: {
+                                    splitEditorTargetChapterID = chapter.id
+                                    showSplitEditor = true
+                                },
+                                onToggleNarration: { included in setNarrationIncluded(chapterID: chapter.id, included: included) }
+                            )
+                            .id(chapter.id)
+                            .draggable(chapter.id.uuidString)
+                            .dropDestination(for: String.self) { droppedIDs, _ in
+                                guard let draggedIDString = droppedIDs.first, let draggedID = UUID(uuidString: draggedIDString) else { return false }
+                                moveChapter(draggedID: draggedID, toIndex: index)
+                                return true
+                            }
+                        }
                     }
                 }
             }
@@ -646,6 +658,19 @@ struct ReviewView: View {
                 ChapterSplitEditorView(bookID: bookID, targetChapterID: splitEditorTargetChapterID)
             }
         }
+    }
+
+    /// Long outlines (AI chapters often run into the hundreds) start
+    /// collapsed into their groups; short ones are shown in full.
+    private func isExpanded(_ group: ChapterOutlineGroup, total: Int) -> Bool {
+        expandedGroups?.contains(group.id) ?? (total <= ChapterOutlineGroup.collapseThreshold)
+    }
+
+    private func toggle(_ group: ChapterOutlineGroup, total: Int) {
+        var expanded = expandedGroups ?? (total <= ChapterOutlineGroup.collapseThreshold
+            ? Set(ChapterOutlineGroup.make(book.sortedChapters).map(\.id)) : [])
+        if expanded.contains(group.id) { expanded.remove(group.id) } else { expanded.insert(group.id) }
+        withAnimation(.snappy) { expandedGroups = expanded }
     }
 
     private func moveChapter(draggedID: UUID, toIndex targetIndex: Int) {
@@ -796,6 +821,80 @@ struct ReviewView: View {
     }
 }
 
+/// A run of chapters under one heading (v4.2.3): the book's own groups
+/// (AI outline), or — in long flat outlines — blocks of 25.
+struct ChapterOutlineGroup: Identifiable, Equatable {
+    static let collapseThreshold = 60
+    static let blockSize = 25
+
+    let id: String
+    let title: String?
+    let range: Range<Int>
+
+    static func make(_ chapters: [Chapter]) -> [ChapterOutlineGroup] {
+        guard !chapters.isEmpty else { return [] }
+        if chapters.contains(where: { $0.groupTitle != nil }) {
+            var groups: [ChapterOutlineGroup] = []
+            var start = 0
+            for index in 1...chapters.count where index == chapters.count || chapters[index].groupTitle != chapters[start].groupTitle {
+                let title = chapters[start].groupTitle
+                groups.append(ChapterOutlineGroup(id: "\(start)-\(title ?? "")", title: title, range: start..<index))
+                start = index
+            }
+            return groups
+        }
+        guard chapters.count > collapseThreshold else {
+            return [ChapterOutlineGroup(id: "all", title: nil, range: 0..<chapters.count)]
+        }
+        return stride(from: 0, to: chapters.count, by: blockSize).map { start in
+            let end = min(start + blockSize, chapters.count)
+            return ChapterOutlineGroup(id: "block-\(start)", title: String(format: L("Kapitel %d–%d"), start + 1, end), range: start..<end)
+        }
+    }
+}
+
+/// Group heading: title, how many chapters, how long; collapsible.
+private struct ChapterGroupHeader: View {
+    let title: String
+    let chapters: ArraySlice<Chapter>
+    let collapsible: Bool
+    let isExpanded: Bool
+    var onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 8) {
+                if collapsible {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 14)
+                }
+                Text(title)
+                    .flowFont(.caption, weight: .semibold)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(String(format: L("%d Kapitel"), chapters.count) + " · " + ChapterRow.minutesLabel(chapters.reduce(0) { $0 + $1.cleanedText.utf8.count }))
+                    .flowFont(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .fixedSize()
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!collapsible)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
 private struct ChapterRow: View {
     let chapter: Chapter
     let index: Int
@@ -814,33 +913,63 @@ private struct ChapterRow: View {
 
     @State private var title: String = ""
     @State private var hovering = false
+    @FocusState private var editing: Bool
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("\(index + 1)")
-                .flowFont(.caption, weight: .semibold)
-                .monospacedDigit()
-                .foregroundStyle(.tertiary)
-                .frame(width: 26, alignment: .trailing)
-            TextField("Kapiteltitel", text: $title)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .serif))
-                .strikethrough(narrationExcluded, color: .secondary)
-                .foregroundStyle(narrationExcluded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                .onAppear { title = chapter.title }
-                .onChange(of: title) { _, newValue in onRename(newValue) }
-                .layoutPriority(1)
+            ZStack(alignment: .trailing) {
+                // Drag handle on hover, number otherwise.
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .opacity(hovering && !editing ? 1 : 0)
+                    .help("Ziehen zum Umsortieren")
+                Text("\(index + 1)")
+                    .flowFont(.caption, weight: .semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .opacity(hovering && !editing ? 0 : 1)
+            }
+            .frame(width: 30, alignment: .trailing)
+            HStack(spacing: 6) {
+                TextField("Kapiteltitel", text: $title)
+                    .textFieldStyle(.plain)
+                    .appFont(size: 14, design: .serif)
+                    .strikethrough(narrationExcluded, color: .secondary)
+                    .foregroundStyle(narrationExcluded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .lineLimit(1)
+                    .focused($editing)
+                    .onSubmit(commit)
+                    .onExitCommand { title = chapter.title; editing = false }
+                if hovering && !editing {
+                    Image(systemName: "pencil")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            // A visible field on hover and while editing (v4.2.3): before,
+            // nothing showed that the title is editable.
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(editing ? 0.07 : (hovering ? 0.035 : 0))))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(.tint.opacity(editing ? 0.6 : 0), lineWidth: 1))
+            .help("Klicken zum Umbenennen · Enter übernimmt, Esc verwirft")
+            .layoutPriority(1)
             if narrationExcluded {
                 Image(systemName: "speaker.slash.fill")
                     .foregroundStyle(.orange)
                     .help("Wird nicht vorgelesen\(chapter.includeInNarration == nil ? " (Vorschlag der automatischen Erkennung — z. B. Inhaltsverzeichnis/Titelei)" : "")")
             }
             DottedLeader().frame(minWidth: 16)
-            Text(Self.minutesLabel(chapter.cleanedText.count))
+            // Fixed width (v4.2.3): it used to wrap one character per line.
+            Text(Self.minutesLabel(chapter.cleanedText.utf8.count))
                 .flowFont(.caption)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .help("\(chapter.cleanedText.count) Zeichen")
+                .lineLimit(1)
+                .fixedSize()
             Menu {
                 if let included = chapter.includeInNarration {
                     if included {
@@ -852,6 +981,7 @@ private struct ChapterRow: View {
                     Button("Nicht vorlesen", action: { onToggleNarration(false) })
                     Button("Auf jeden Fall vorlesen", action: { onToggleNarration(true) })
                 }
+                Button("Umbenennen") { editing = true }
                 if let onSplit {
                     Button("Kapitel teilen …", action: onSplit)
                 }
@@ -872,18 +1002,36 @@ private struct ChapterRow: View {
             .menuIndicator(.hidden)
             .foregroundStyle(.secondary)
             .opacity(hovering ? 1 : 0.35)
+            .fixedSize()
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(hovering ? 0.04 : 0)))
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(hovering ? 0.03 : 0)))
         .padding(.horizontal, 6)
         .onHover { hovering = $0 }
+        // Showing a row no longer writes the book (v4.2.3): the title is
+        // only saved when an edit is committed — before, every row that
+        // scrolled into view saved the whole library.
+        .onAppear { title = chapter.title }
+        .onChange(of: chapter.title) { _, newValue in if !editing { title = newValue } }
+        .onChange(of: editing) { _, isEditing in if !isEditing { commit() } }
     }
 
-    /// Characters → spoken minutes (≈ 950 characters per minute).
-    static func minutesLabel(_ characters: Int) -> String {
-        let minutes = Double(characters) / 950
-        if minutes < 1 { return "< 1 Min." }
-        return "\(Int(minutes.rounded())) Min."
+    private func commit() {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != chapter.title else {
+            title = chapter.title
+            return
+        }
+        onRename(trimmed)
+    }
+
+    /// Bytes of text → spoken minutes (≈ 1000 UTF-8 bytes per minute; the
+    /// byte count is O(1), unlike counting characters).
+    static func minutesLabel(_ utf8Bytes: Int) -> String {
+        let minutes = Double(utf8Bytes) / 1000
+        if minutes < 1 { return L("< 1 Min.") }
+        if minutes >= 90 { return String(format: L("%d Std. %d Min."), Int(minutes) / 60, Int(minutes) % 60) }
+        return String(format: L("%d Min."), Int(minutes.rounded()))
     }
 }

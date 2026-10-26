@@ -87,9 +87,19 @@ final class RevoicingTests: XCTestCase {
         var book = makeBook()
         Revoicing.prepare(&book, engine: .phonon, voice: "de/Nele", speed: 1, resummarize: false, chapterAudioRoot: root)
         try LibraryLayout.writeBook(book, root: root)
-        let stored = try XCTUnwrap(LibraryLayout.readBook(bookID: book.id, root: root))
+        // Chapter status updates during the run rewrite only book.json —
+        // the backup (with all segment texts) is not part of it.
+        try LibraryLayout.writeBook(book, root: root, writeTexts: false)
+        let metadata = try String(contentsOf: LibraryLayout.bookMetadataURL(root, bookID: book.id), encoding: .utf8)
+        XCTAssertFalse(metadata.contains("revoiceBackup"))
+        var stored = try XCTUnwrap(LibraryLayout.readBook(bookID: book.id, root: root))
+        LibraryLayout.hydrate(&stored, root: root)
         XCTAssertEqual(stored.revoiceBackup?.engineID, .kokoro)
         XCTAssertEqual(stored.revoiceBackup?.chapters.count, 2)
+        // Committed/restored: the backup file goes away with the next text write.
+        book.revoiceBackup = nil
+        try LibraryLayout.writeBook(book, root: root)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: LibraryLayout.revoiceBackupURL(root, bookID: book.id).path))
     }
 
     func testPositionKeepsChapterAndShare() throws {
@@ -151,5 +161,48 @@ final class LibraryStoreNewBookTextTests: XCTestCase {
 
         let fresh = LibraryStore(root: root)
         XCTAssertEqual(fresh.book(id: book.id)?.chapters.first?.cleanedText, "Ein ganzer Satz.")
+    }
+}
+
+/// v4.1: an interrupted re-voicing (crash) is rolled back at launch.
+@MainActor
+final class RevoiceCrashRecoveryTests: XCTestCase {
+    func testInterruptedRevoicingIsRestoredAtLaunchButPausedIsKept() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("abf-recover-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = LibraryStore(root: root.appendingPathComponent("library", isDirectory: true))
+        let settings = SettingsStore(fileURL: root.appendingPathComponent("settings.json"))
+        func makeBook(_ title: String) -> BookProject {
+            var book = BookProject(title: title, author: "A", sourceType: .epub, sourceURL: URL(fileURLWithPath: "/dev/null"),
+                                   chapters: [Chapter(title: "K", rawText: "Text.", cleanedText: "Text.", order: 0)],
+                                   outputFormat: .mp3Chapters, voice: "af_heart", speechSpeed: 1)
+            book.engineID = .kokoro
+            book.status = .completed
+            book.chapters[0].audioStatus = .ready
+            book.chapters[0].audioDurationSeconds = 10
+            return book
+        }
+        var crashed = makeBook("Abgestürzt")
+        Revoicing.prepare(&crashed, engine: .phonon, voice: "de/Nele", speed: 1, resummarize: false,
+                          chapterAudioRoot: root.appendingPathComponent("chapter_audio"))
+        crashed.status = .processing
+        var paused = makeBook("Pausiert")
+        Revoicing.prepare(&paused, engine: .phonon, voice: "de/Nele", speed: 1, resummarize: false,
+                          chapterAudioRoot: root.appendingPathComponent("chapter_audio"))
+        paused.status = .paused
+        library.upsert(crashed)
+        library.upsert(paused)
+        library.flush()
+
+        let controller = PipelineController(libraryStore: library, settingsStore: settings,
+                                            chapterAudioRoot: root.appendingPathComponent("chapter_audio"))
+        let restored = controller.recoverInterruptedRevoicing()
+        XCTAssertEqual(restored, [crashed.id])
+        let after = try XCTUnwrap(library.book(id: crashed.id))
+        XCTAssertEqual(after.engineID, .kokoro)
+        XCTAssertEqual(after.status, .completed)
+        XCTAssertNil(after.revoiceBackup)
+        XCTAssertNotNil(after.lastErrorMessage)
+        XCTAssertNotNil(library.book(id: paused.id)?.revoiceBackup, "pausierte Neuvertonung bleibt fortsetzbar")
     }
 }

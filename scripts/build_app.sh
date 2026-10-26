@@ -1,13 +1,13 @@
 #!/bin/bash
-# Builds a signed Release AudiobookForge (Personal Team, automatic signing),
-# verifies the signature, and replaces dist/ and /Applications with it.
+# Builds an ad-hoc signed Release AudiobookForge, verifies the signature,
+# and copies it to ../releases/ (or $DIST_DIR) and /Applications.
 # A running instance is asked to quit first so the bundle isn't replaced
 # underneath it.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_DIR="$ROOT_DIR/AudiobookForge"
-DIST_DIR="$ROOT_DIR/dist"
+PROJECT_DIR="$ROOT_DIR"
+DIST_DIR="${DIST_DIR:-$ROOT_DIR/../releases}"
 DERIVED_DATA="${DERIVED_DATA:-/tmp/audiobookforge-release}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 
@@ -15,14 +15,16 @@ cd "$PROJECT_DIR"
 echo "==> tuist generate"
 tuist generate --no-open
 
-echo "==> xcodebuild build ($CONFIGURATION, signed)"
+echo "==> xcodebuild build ($CONFIGURATION, ad-hoc signed)"
 xcodebuild \
     -workspace AudiobookForge.xcworkspace \
     -scheme AudiobookForge \
     -configuration "$CONFIGURATION" \
-    -destination 'platform=macOS' \
+    -destination 'platform=macOS,arch=arm64' \
     -derivedDataPath "$DERIVED_DATA" \
-    -allowProvisioningUpdates \
+    CODE_SIGN_IDENTITY="-" \
+    DEVELOPMENT_TEAM="" \
+    CODE_SIGN_STYLE=Manual \
     build | grep -E "error:|Signing Identity|BUILD (SUCCEEDED|FAILED)" || true
 
 APP_PATH="$DERIVED_DATA/Build/Products/$CONFIGURATION/AudiobookForge.app"
@@ -31,12 +33,9 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-echo "==> codesign verify"
+echo "==> codesign (ad-hoc)"
+codesign --force --deep --sign - "$APP_PATH"
 codesign --verify --deep --strict "$APP_PATH"
-codesign -dv "$APP_PATH" 2>&1 | grep -E "Authority=Apple Development|TeamIdentifier" || {
-    echo "ERROR: app is not signed with the development team"
-    exit 1
-}
 
 mkdir -p "$DIST_DIR"
 rm -rf "$DIST_DIR/AudiobookForge.app"
@@ -49,7 +48,7 @@ if [ -d "/Applications" ] && [ -w "/Applications" ]; then
         for _ in $(seq 1 20); do pgrep -x AudiobookForge >/dev/null || break; sleep 0.5; done
     fi
     rm -rf "/Applications/AudiobookForge.app"
-    ditto "$APP_PATH" "/Applications/AudiobookForge.app"
+    ditto "$DIST_DIR/AudiobookForge.app" "/Applications/AudiobookForge.app"
     echo "==> Installed: /Applications/AudiobookForge.app"
 fi
 

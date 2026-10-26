@@ -43,3 +43,12 @@ final class MultilingualHeuristicsTests: XCTestCase {
         XCTAssertEqual(french.engine, .phonon)
     }
 }
+
+extension MultilingualHeuristicsTests {
+    func testTopicsAreRecognizedInRomanceLanguages() {
+        let fr = String(repeating: "Le patient présente un syndrome inflammatoire ; le diagnostic et la thérapie suivent la pharmacologie clinique. ", count: 6)
+        XCTAssertEqual(TopicClassifier.classify(title: "Médecine", author: "", documentType: .book, textSample: fr, languageCode: "fr").topic, .medicine)
+        let it = String(repeating: "Il romanzo comincia di notte: «Vieni», sussurrò lei, e lui sorrise nel villaggio addormentato. ", count: 6)
+        XCTAssertEqual(TopicClassifier.classify(title: "Racconto", author: "", documentType: .book, textSample: it, languageCode: "it").topic, .literature)
+    }
+}

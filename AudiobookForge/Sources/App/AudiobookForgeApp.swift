@@ -13,6 +13,9 @@ struct AudiobookForgeApp: App {
         // terminate). Ignore it — pipe writes then surface as EPIPE
         // errors, which the streaming code already handles.
         signal(SIGPIPE, SIG_IGN)
+        // Timeouts and retries for every download in child processes (v4.2).
+        NetworkPolicy.applyToChildProcesses()
+        PixelFont.register()
 
         // One-time v2 → v3 library migration (plan 5.1): backed up first,
         // atomic per book, rolled back to the untouched v2 file on any
@@ -51,7 +54,9 @@ struct AudiobookForgeApp: App {
         // REAL library is destructive from a test context.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             let books = library.books
+            let pipeline = _pipelineController.wrappedValue
             Task { @MainActor in
+                pipeline.recoverInterruptedRevoicing()
                 ChapterAudioStore.removeOrphanChapterAudio(keeping: books.map(\.id))
                 await ChapterAudioStore.migrateLegacyChapterAudio(libraryStore: library, settings: settings.settings)
                 if let ffmpeg = await FFmpegLocator.resolveAsync(settings: settings.settings) {

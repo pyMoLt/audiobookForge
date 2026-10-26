@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Accent colors (plan 9.1, Vorlage: NativeTongue-Screenshot)
 
@@ -354,6 +355,34 @@ extension AppAccent {
     /// Resolved control color (system accent for `.system`).
     var color: Color { Theme.tint(for: self) }
 
+    /// Accent for TEXT on a faint accent tint (secondary buttons, badges).
+    /// In dark mode the base is mixed with white until it reaches WCAG
+    /// 4.5:1 on the dark surface — graphite or indigo otherwise read as
+    /// disabled (v4.1 visual pass).
+    var textColor: Color {
+        guard self != .system else { return .accentColor }
+        let light = NSColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+        let lift = darkModeLift
+        let dark = NSColor(red: rgb.red + (1 - rgb.red) * lift, green: rgb.green + (1 - rgb.green) * lift,
+                           blue: rgb.blue + (1 - rgb.blue) * lift, alpha: 1)
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
+
+    /// Share of white mixed into the base for dark-mode text (0 = none).
+    var darkModeLift: Double {
+        let surface = ContrastMath.luminance(red: 0.17, green: 0.17, blue: 0.18)
+        var lift = 0.0
+        while lift < 0.9 {
+            let mix = { (c: Double) in c + (1 - c) * lift }
+            let lum = ContrastMath.luminance(red: mix(rgb.red), green: mix(rgb.green), blue: mix(rgb.blue))
+            if ContrastMath.ratio(lum, surface) >= 4.5 { break }
+            lift += 0.05
+        }
+        return lift
+    }
+
     /// How much a prominent fill is deepened (mixed with black) so WHITE
     /// text reaches WCAG 4.5:1 on it — the template shows white on the
     /// accent. Light accents (amber) would turn muddy; they keep their
@@ -404,6 +433,7 @@ private struct FlowFontModifier: ViewModifier {
     let weight: Font.Weight?
     let design: Font.Design
     @Environment(\.appTextScale) private var scale
+    @Environment(\.pixelMode) private var pixelMode
 
     func body(content: Content) -> some View {
         let base: (CGFloat, Font.Weight) = {
@@ -418,6 +448,7 @@ private struct FlowFontModifier: ViewModifier {
             case .caption2: return (10, .medium)
             }
         }()
-        content.font(.system(size: base.0 * scale, weight: weight ?? base.1, design: design))
+        content.font(pixelMode ? PixelFont.font(size: base.0 * scale, weight: weight ?? base.1)
+                               : .system(size: base.0 * scale, weight: weight ?? base.1, design: design))
     }
 }

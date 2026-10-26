@@ -5,9 +5,9 @@
 # Re-run after replacing a source image, then `tuist generate`.
 set -euo pipefail
 ROOT=${0:a:h:h}
-SRC=$ROOT/docs/Ambiente
+SRC=${AMBIENT_SRC_DIR:-$ROOT/../dev-docs/docs/Ambiente}
 PIX=$SRC/pixelized
-OUT=$ROOT/AudiobookForge/AudiobookForge/Resources/Scenes
+OUT=$ROOT/AudiobookForge/Resources/Scenes
 TMP=$(mktemp -d)
 trap 'rm -rf $TMP' EXIT
 

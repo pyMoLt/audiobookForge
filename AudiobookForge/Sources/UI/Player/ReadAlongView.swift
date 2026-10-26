@@ -300,7 +300,7 @@ struct ReaderPane: View {
                     if layout.paragraphs.isEmpty {
                         ForEach(Array(layout.plain.enumerated()), id: \.offset) { _, text in
                             Text(text)
-                                .font(.system(size: textSize, design: .serif))
+                                .appFont(size: textSize, design: .serif)
                                 .lineSpacing(textSize * 0.42)
                                 .textSelection(.enabled)
                         }
@@ -320,7 +320,7 @@ struct ReaderPane: View {
                         }
                     }
                     Text("❦")
-                        .font(.system(size: 20, design: .serif))
+                        .appFont(size: 20, design: .serif)
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 30)
@@ -391,7 +391,7 @@ struct ReaderPane: View {
                     .tracking(1.2)
             }
             Text(chapter?.title ?? book.title)
-                .font(.system(size: textSize * 1.65, weight: .semibold, design: .serif))
+                .appFont(size: textSize * 1.65, weight: .semibold, design: .serif)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Rectangle().fill(accent.color).frame(width: 34, height: 2)
@@ -508,7 +508,7 @@ struct ParagraphText: View, Equatable {
 
     var body: some View {
         Text(attributed)
-            .font(.system(size: textSize, design: .serif))
+            .appFont(size: textSize, design: .serif)
             .lineSpacing(textSize * 0.42)
             .tint(.primary)
             .fixedSize(horizontal: false, vertical: true)
@@ -560,7 +560,7 @@ struct ChapterListPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Inhalt")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 10)

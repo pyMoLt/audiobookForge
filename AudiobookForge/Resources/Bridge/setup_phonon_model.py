@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Downloads one Phonon 40m language model plus that language's catalog
-voices into AudiobookForge's model folder (v4).
+"""Downloads one Phonon language model plus that language's catalog
+voices into AudiobookForge's model folder (v4; v4.2: also the English 31m
+model — Apache 2.0, not gated — into <lang>-31m).
 
 The 40m models are gated on Hugging Face: the user accepts the terms on the
 model page once and signs in (token from HF_TOKEN or a saved `hf auth
@@ -25,13 +26,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lang", required=True, choices=["de", "en", "fr", "es", "pt"])
     parser.add_argument("--models-root", required=True)
+    parser.add_argument("--size", default="40m", choices=["40m", "31m"])
     args = parser.parse_args()
 
     from huggingface_hub import hf_hub_download
     from huggingface_hub.utils import GatedRepoError, HfHubHTTPError
 
-    repo = f"gradium/phonon-40m-{args.lang}"
-    target = os.path.join(args.models_root, args.lang)
+    repo = f"gradium/phonon-{args.size}-{args.lang}"
+    target = os.path.join(args.models_root, args.lang if args.size == "40m" else f"{args.lang}-{args.size}")
     staging = target + ".partial"
     shutil.rmtree(staging, ignore_errors=True)
     os.makedirs(os.path.join(staging, "voices"), exist_ok=True)

@@ -1,0 +1,316 @@
+{
+ "medicine": [
+  {
+   "keyword": "anamnesis",
+   "weight": 3
+  },
+  {
+   "keyword": "diagnóstico",
+   "weight": 3
+  },
+  {
+   "keyword": "terapia",
+   "weight": 3
+  },
+  {
+   "keyword": "tratamiento",
+   "weight": 2
+  },
+  {
+   "keyword": "paciente",
+   "weight": 3
+  },
+  {
+   "keyword": "clínico",
+   "weight": 2
+  },
+  {
+   "keyword": "patología",
+   "weight": 3
+  },
+  {
+   "keyword": "fisiopatología",
+   "weight": 3
+  },
+  {
+   "keyword": "síndrome",
+   "weight": 2
+  },
+  {
+   "keyword": "síntoma",
+   "weight": 2
+  },
+  {
+   "keyword": "médico",
+   "weight": 2
+  },
+  {
+   "keyword": "hospital",
+   "weight": 2
+  },
+  {
+   "keyword": "medicamento",
+   "weight": 2
+  },
+  {
+   "keyword": "antibiótico",
+   "weight": 2
+  },
+  {
+   "keyword": "dosis",
+   "weight": 2
+  },
+  {
+   "keyword": "vacuna",
+   "weight": 2
+  },
+  {
+   "keyword": "anatomía",
+   "weight": 2
+  },
+  {
+   "keyword": "fisiología",
+   "weight": 2
+  },
+  {
+   "keyword": "cirugía",
+   "weight": 2
+  },
+  {
+   "keyword": "inflamación",
+   "weight": 2
+  },
+  {
+   "keyword": "farmacología",
+   "weight": 3
+  }
+ ],
+ "science": [
+  {
+   "keyword": "experimento",
+   "weight": 2
+  },
+  {
+   "keyword": "hipótesis",
+   "weight": 2
+  },
+  {
+   "keyword": "teoría",
+   "weight": 2
+  },
+  {
+   "keyword": "ecuación",
+   "weight": 3
+  },
+  {
+   "keyword": "molécula",
+   "weight": 2
+  },
+  {
+   "keyword": "átomo",
+   "weight": 2
+  },
+  {
+   "keyword": "energía",
+   "weight": 1
+  },
+  {
+   "keyword": "algoritmo",
+   "weight": 3
+  },
+  {
+   "keyword": "datos",
+   "weight": 1
+  },
+  {
+   "keyword": "física",
+   "weight": 2
+  },
+  {
+   "keyword": "química",
+   "weight": 2
+  },
+  {
+   "keyword": "biología",
+   "weight": 2
+  },
+  {
+   "keyword": "medición",
+   "weight": 1
+  },
+  {
+   "keyword": "laboratorio",
+   "weight": 2
+  },
+  {
+   "keyword": "ingeniería",
+   "weight": 2
+  },
+  {
+   "keyword": "electrón",
+   "weight": 2
+  },
+  {
+   "keyword": "proteína",
+   "weight": 2
+  }
+ ],
+ "literature": [
+  {
+   "keyword": "dijo él",
+   "weight": 3
+  },
+  {
+   "keyword": "dijo ella",
+   "weight": 3
+  },
+  {
+   "keyword": "susurró",
+   "weight": 2
+  },
+  {
+   "keyword": "capítulo primero",
+   "weight": 2
+  },
+  {
+   "keyword": "novela",
+   "weight": 2
+  },
+  {
+   "keyword": "narrador",
+   "weight": 2
+  },
+  {
+   "keyword": "aldea",
+   "weight": 1
+  },
+  {
+   "keyword": "sonrió",
+   "weight": 2
+  },
+  {
+   "keyword": "mirada",
+   "weight": 1
+  },
+  {
+   "keyword": "sueño",
+   "weight": 1
+  },
+  {
+   "keyword": "noche",
+   "weight": 1
+  },
+  {
+   "keyword": "amor",
+   "weight": 1
+  }
+ ],
+ "history": [
+  {
+   "keyword": "siglo",
+   "weight": 2
+  },
+  {
+   "keyword": "guerra",
+   "weight": 2
+  },
+  {
+   "keyword": "imperio",
+   "weight": 2
+  },
+  {
+   "keyword": "revolución",
+   "weight": 2
+  },
+  {
+   "keyword": "rey",
+   "weight": 2
+  },
+  {
+   "keyword": "reinado",
+   "weight": 2
+  },
+  {
+   "keyword": "tratado",
+   "weight": 2
+  },
+  {
+   "keyword": "dinastía",
+   "weight": 3
+  },
+  {
+   "keyword": "batalla",
+   "weight": 2
+  },
+  {
+   "keyword": "sociedad",
+   "weight": 1
+  },
+  {
+   "keyword": "política",
+   "weight": 1
+  },
+  {
+   "keyword": "colonia",
+   "weight": 2
+  },
+  {
+   "keyword": "historiador",
+   "weight": 2
+  }
+ ],
+ "economy": [
+  {
+   "keyword": "mercado",
+   "weight": 2
+  },
+  {
+   "keyword": "empresa",
+   "weight": 2
+  },
+  {
+   "keyword": "balance",
+   "weight": 3
+  },
+  {
+   "keyword": "facturación",
+   "weight": 3
+  },
+  {
+   "keyword": "contrato",
+   "weight": 2
+  },
+  {
+   "keyword": "tribunal",
+   "weight": 2
+  },
+  {
+   "keyword": "artículo",
+   "weight": 1
+  },
+  {
+   "keyword": "ley",
+   "weight": 2
+  },
+  {
+   "keyword": "derecho",
+   "weight": 2
+  },
+  {
+   "keyword": "fiscal",
+   "weight": 2
+  },
+  {
+   "keyword": "inversión",
+   "weight": 2
+  },
+  {
+   "keyword": "accionista",
+   "weight": 3
+  },
+  {
+   "keyword": "inflación",
+   "weight": 2
+  }
+ ]
+}

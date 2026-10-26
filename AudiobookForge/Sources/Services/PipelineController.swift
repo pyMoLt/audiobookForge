@@ -147,6 +147,30 @@ final class PipelineController {
         return true
     }
 
+    /// At launch (v4.1) nothing runs yet: a book that still carries a
+    /// re-voicing backup was interrupted (crash, force quit). Put its
+    /// previous narration back — except for a paused run, which the user
+    /// can resume. Returns the restored books.
+    @discardableResult
+    func recoverInterruptedRevoicing() -> [UUID] {
+        let fm = FileManager.default
+        let candidates = libraryStore.books.filter { book in
+            book.revoiceBackup != nil
+                || fm.fileExists(atPath: LibraryLayout.revoiceBackupURL(libraryStore.rootURL, bookID: book.id).path)
+        }.map(\.id)
+        var restored: [UUID] = []
+        for id in candidates {
+            guard activeBookID != id, !queuedBookIDs.contains(id),
+                  var book = libraryStore.book(id: id), book.revoiceBackup != nil, book.status != .paused else { continue }
+            Revoicing.restore(&book, chapterAudioRoot: chapterAudioRoot)
+            book.lastErrorMessage = L("Neu vertonen wurde unterbrochen — die bisherige Fassung ist wiederhergestellt.")
+            libraryStore.upsert(book)
+            restored.append(id)
+        }
+        if !restored.isEmpty { libraryStore.flush() }
+        return restored
+    }
+
     /// After a run: commit a finished re-voicing, keep a paused one, put
     /// the previous narration back for anything else.
     private func finishRevoiceIfNeeded(bookID: UUID) {
@@ -905,6 +929,13 @@ final class PipelineController {
                 // chapters render at once.
                 let parallelWorkers = PowerProfile.current.ttsWorkers(userSetting: settings.ttsWorkers(for: book.engineID))
                 logger.log("Synthese: \(book.chapters.count) Kapitel insgesamt, \(alreadyDoneIndices.count) bereits fertig, \(pendingIndices.count) zu synthetisieren (\(parallelWorkers) parallele Worker).")
+                if book.engineID == .phonon,
+                   PhononEngine.usesNeuralEngine(profile: PowerProfile.current, speed: book.speechSpeed,
+                                                 temperature: settings.phononTemperature, refinementSteps: settings.phononRefinementSteps,
+                                                 neuralReady: PhononEnvironmentManager.shared.isNeuralReady(
+                                                    PhononEnvironmentManager.modelKey(language: PhononEngine.split(book.voice).language, english31m: settings.phononEnglish31m))) {
+                    logger.log("Phonon spricht über die Neural Engine (Energiemodus Stromsparend).")
+                }
 
                 let pendingItems: [PendingSynthesisItem] = pendingIndices.map { idx in
                     let c = book.chapters[idx]
@@ -917,9 +948,24 @@ final class PipelineController {
                     )
                 }
 
+                // v4.1: MP3 chapters get their final ID3 tags on this first
+                // encode, so packaging can move them instead of copying.
+                var taggedURLs: [URL] = []
+                if book.outputFormat == .mp3Chapters {
+                    let tags = ChapterAudioTags.tags(for: book, narrated: book.chapters.filter { isIncludedInNarration($0) })
+                    var map: [URL: ChapterTag] = [:]
+                    for item in pendingItems {
+                        if let tag = tags[book.chapters[item.index].id] { map[item.outputURL] = tag }
+                    }
+                    ChapterAudioTags.register(map)
+                    taggedURLs = Array(map.keys)
+                }
+                defer { ChapterAudioTags.unregister(taggedURLs) }
+
                 let totalChapters = book.chapters.count
                 let voice = book.voice
                 let speed = book.speechSpeed
+                let qualitySettings = settings
 
                 try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: chapterAudioRoot)
 
@@ -964,6 +1010,7 @@ final class PipelineController {
                                     }
                                 }
                             )
+                            await ChapterQualityReport.check(result.audioFileURL, chapter: "Kapitel \(item.index + 1)", settings: qualitySettings, logger: logger)
                             return ChapterSynthesisResult(index: item.index, result: result)
                         }
                     }
@@ -1006,6 +1053,7 @@ final class PipelineController {
                                         }
                                     }
                                 )
+                                await ChapterQualityReport.check(result.audioFileURL, chapter: "Kapitel \(nextItem.index + 1)", settings: qualitySettings, logger: logger)
                                 return ChapterSynthesisResult(index: nextItem.index, result: result)
                             }
                         }
@@ -1069,6 +1117,7 @@ final class PipelineController {
             book.logFileURL = logger.fileURL
             libraryStore.upsert(book)
             logger.log("=== Fertig. Ausgabe: \(finalURL.path) ===")
+            NotificationCenter.default.post(name: .audiobookCompleted, object: bookID)
         } catch is CancellationError {
             let wasPaused = pausedBookIDs.remove(bookID) != nil
             let watchdogMessage = ramWatchdogTriggered.removeValue(forKey: bookID)
@@ -1176,6 +1225,11 @@ final class PipelineController {
             let chapter = book.chapters[chapterIndex]
             try ChapterAudioStore.prepareChapterAudioDirectory(bookID: bookID, root: chapterAudioRoot)
             let outputURL = ChapterAudioStore.chapterFileURL(bookID: bookID, order: chapter.order, format: book.outputFormat, root: chapterAudioRoot)
+            if book.outputFormat == .mp3Chapters,
+               let tag = ChapterAudioTags.tags(for: book, narrated: book.chapters.filter { isIncludedInNarration($0) })[chapter.id] {
+                ChapterAudioTags.register([outputURL: tag])
+            }
+            defer { ChapterAudioTags.unregister([outputURL]) }
 
             let result = try await engine.synthesize(
                 text: narrationText(for: chapter, book: book),
@@ -1192,6 +1246,7 @@ final class PipelineController {
                 }
             )
 
+            await ChapterQualityReport.check(result.audioFileURL, chapter: "Kapitel \(chapterIndex + 1)", settings: settingsStore.settings, logger: logger)
             book.chapters[chapterIndex].audioFileURL = result.audioFileURL
             book.chapters[chapterIndex].audioDurationSeconds = result.durationSeconds
             book.chapters[chapterIndex].audioSegments = result.segments

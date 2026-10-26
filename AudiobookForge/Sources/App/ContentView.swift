@@ -37,6 +37,9 @@ struct ContentView: View {
     private var isNarrow: Bool { windowWidth < 820 }
     private var showsSidebar: Bool { isNarrow ? narrowSidebarShown : sidebarVisible }
     @State private var showSetup = false
+    /// Easter eggs (v4.3): achievements, owl post, pixel-mode cascade.
+    @State private var fun = FunCenter()
+    @State private var konami = KonamiCodeMonitor()
     @AppStorage("sidebar.width") private var sidebarWidth: Double = 290
     @AppStorage("window.alwaysOnTop") private var alwaysOnTop = false
 
@@ -116,6 +119,29 @@ struct ContentView: View {
                 DropOverlay()
                     .transition(.opacity)
             }
+
+            if let delivery = fun.owlPost {
+                OwlPostOverlay(delivery: delivery, onOpen: {
+                    selection = .book(delivery.bookID)
+                    fun.owlPost = nil
+                }, onDone: {
+                    withAnimation { if fun.owlPost == delivery { fun.owlPost = nil } }
+                })
+                .id(delivery.id)
+            }
+
+            if let toast = fun.toast {
+                AchievementToast(achievement: toast)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 28)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+
+            if fun.cascadeStep > 0 {
+                RetroCascadeOverlay()
+                    .transition(.opacity)
+            }
         }
         .animation(.easeInOut(duration: 0.8), value: showsAmbientVisuals)
         .animation(.easeInOut(duration: 0.8), value: playback.ambient.scene)
@@ -135,11 +161,42 @@ struct ContentView: View {
         .environment(\.flowAccent, accent)
         .environment(\.energyAnimates, powerMode.animates)
         .environment(\.surfaceLevel, SurfaceLevel(intensity: settingsStore.settings.glassIntensity))
-        .font(.system(size: 13 * textScale))
-        .tint(accent.color)
+        .appFont(size: 13 * textScale)
+        .environment(\.pixelMode, settingsStore.settings.pixelMode)
+        .environment(fun)
+        .tint(accent.textColor)
         .onChange(of: settingsStore.settings.appearanceMode) { _, newValue in applyAppearance(newValue) }
         .onChange(of: alwaysOnTop) { _, newValue in applyAlwaysOnTop(newValue) }
+        .onChange(of: settingsStore.settings.soundEffectsEnabled) { _, enabled in SoundFX.shared.enabled = enabled }
+        .onReceive(NotificationCenter.default.publisher(for: .audiobookCompleted)) { note in
+            if let id = note.object as? UUID, let book = libraryStore.book(id: id) {
+                fun.bookCompleted(book, library: libraryStore.books)
+            }
+        }
+        #if DEBUG
+        // fun=owl | toast:<id> | cascade | yes | no — previews, nothing is stored.
+        .onReceive(NotificationCenter.default.publisher(for: DebugAutomation.navigate)) { note in
+            guard let value = (note.userInfo as? [String: String])?["fun"] else { return }
+            if value == "owl", let book = libraryStore.books.first {
+                fun.owlPost = FunCenter.OwlDelivery(bookID: book.id, title: book.title)
+                SoundFX.shared.play(.owlHoot)
+            } else if value.hasPrefix("toast:"), let achievement = Achievement(rawValue: String(value.dropFirst(6))) {
+                withAnimation { fun.toast = achievement }
+            } else if value == "notoast" {
+                fun.toast = nil
+            } else if value == "cascade" {
+                fun.cascadeStep = 1
+            } else if value == "yes", fun.cascadeStep < FunCenter.cascadeMessages.count {
+                fun.cascadeStep += 1
+            } else if value == "no" {
+                fun.cancelCascade()
+            }
+        }
+        #endif
         .onAppear {
+            fun.attach(settingsStore)
+            SoundFX.shared.enabled = settingsStore.settings.soundEffectsEnabled
+            konami.start { [fun] in fun.konamiEntered() }
             applyAppearance(settingsStore.settings.appearanceMode)
             if alwaysOnTop { applyAlwaysOnTop(true) }
             if SetupAssistantView.shouldShowAutomatically { showSetup = true }
@@ -147,7 +204,9 @@ struct ContentView: View {
         .sheet(isPresented: $showSetup) {
             SetupAssistantView()
                 .environment(\.flowAccent, accent)
-                .tint(accent.color)
+                .environment(\.pixelMode, settingsStore.settings.pixelMode)
+                .environment(fun)
+                .tint(accent.textColor)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSetupAssistant)) { _ in showSetup = true }
         .onReceive(NotificationCenter.default.publisher(for: .openSettingsPane)) { note in
@@ -159,7 +218,9 @@ struct ContentView: View {
         .sheet(item: $revoiceBook) { request in
             RevoiceSheet(bookID: request.id)
                 .environment(\.flowAccent, accent)
-                .tint(accent.color)
+                .environment(\.pixelMode, settingsStore.settings.pixelMode)
+                .environment(fun)
+                .tint(accent.textColor)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
             playback.savePosition()

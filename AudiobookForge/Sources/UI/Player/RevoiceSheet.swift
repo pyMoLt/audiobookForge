@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// "Neu vertonen" (v4): pick another voice for a finished book, listen to
 /// it reading a passage of THIS book, and render the book again. Text,
@@ -37,14 +38,14 @@ struct RevoiceSheet: View {
                 Text("Buch nicht gefunden.").padding(40)
             }
         }
-        .frame(minWidth: 680, idealWidth: 900, minHeight: 620, idealHeight: 760)
+        .resizableSheet(preferred: CGSize(width: 900, height: 760), floor: CGSize(width: 520, height: 440))
         .background { PaperPage() }
     }
 
     private func header(_ book: BookProject) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(String(format: L("„%@“ neu vertonen"), book.title))
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .appFont(size: 22, weight: .semibold, design: .serif)
                 .lineLimit(2)
             Text("Text, Zusammenfassungen und Bildbeschreibungen bleiben erhalten. Die bisherige Fassung wird erst ersetzt, wenn die neue vollständig fertig ist — bei Abbruch bleibt sie unverändert. Hörproben lesen einen Abschnitt aus diesem Buch.")
                 .flowFont(.caption)
